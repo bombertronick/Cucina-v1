@@ -1368,3 +1368,418 @@
             if(t > 0) { const pct = Math.round((d / t) * 100); p.style.width = pct + '%'; p.style.background = pct === 100 ? 'var(--success)' : 'var(--warning)'; } 
             else p.style.width = '0%'; 
         }
+        function checkExpiry(ds) { 
+            if(!ds) return ""; 
+            let e = new Date(ds); let t = new Date(); t.setHours(0,0,0,0); 
+            let d = Math.ceil((e - t) / (1000 * 60 * 60 * 24)); 
+            
+            if(d < 0) return "<span style='font-size:0.75rem; padding:4px 8px; border-radius:6px; background:var(--danger); color:white; font-weight:800; letter-spacing:1px;'>SCADUTO</span>"; 
+            if(d === 0) return "<span style='font-size:0.75rem; padding:4px 8px; border-radius:6px; background:var(--warning); color:black; font-weight:800; letter-spacing:1px;'>OGGI</span>"; 
+            if(d <= 2) return `<span style='font-size:0.75rem; padding:4px 8px; border-radius:6px; background:var(--warning); color:black; font-weight:800; letter-spacing:1px;'>${d}gg</span>`; 
+            return `<span style='font-size:0.75rem; padding:4px 8px; border-radius:6px; background:var(--input-bg); border:1px solid var(--border); color:var(--text-muted); font-weight:800;'>Scad: ${e.toLocaleDateString('it-IT')}</span>`; 
+        }
+
+        function renderContentCore() {
+            const c = document.getElementById('main-content'); if(!c) return; c.innerHTML = ''; 
+            const si = document.getElementById('search-input'); const q = si ? si.value.toLowerCase().trim() : '';
+            if(!activeSede || !activeFolder || !appStructure.sedi[activeSede].folders[activeFolder]) return;
+            
+            const fol = appStructure.sedi[activeSede].folders[activeFolder]; const cd = new Date().getDay();
+            const bp = document.getElementById('floating-paste-btn'); if(bp) bp.style.display = (clipboardSection && editMode) ? 'flex' : 'none';
+            
+            fol.sections.forEach(sec => {
+                let itemsToShow = sec.items.filter(i => { 
+                    const matchCat = activeCatFilter === 'tutti' || i.catId === activeCatFilter; 
+                    const matchSearch = q === '' || i.n.toLowerCase().includes(q) || (i.info && i.info.toLowerCase().includes(q)); 
+                    const isToday = !i.days || i.days.length === 0 || i.days.includes(cd); 
+                    const matchTime = editMode || showHiddenTimeGated || isToday; 
+                    return matchCat && matchSearch && matchTime; 
+                });
+                
+                if(isFifo) itemsToShow.sort((a,b) => { let da = a.expiry ? new Date(a.expiry).getTime() : 9999999999999; let db = b.expiry ? new Date(b.expiry).getTime() : 9999999999999; return da - db; });
+                if(itemsToShow.length === 0 && !editMode) return;
+                
+                const crd = document.createElement('div'); crd.className = 'card';
+                let html = `
+                    <div class="card-header">
+                        <span style="color:${sec.color}">${sanitize(sec.name)}</span>
+                        ${editMode && q === '' && !isFifo ? `
+                            <div style="display:flex; gap:16px;">
+                                <i class="fa-solid fa-copy" style="cursor:pointer; color:var(--accent);" onclick="copySection('${sec.id}')"></i>
+                                <i class="fa-solid fa-arrow-up" style="cursor:pointer; color:var(--text-muted);" onclick="moveSection('${sec.id}',-1)"></i>
+                                <i class="fa-solid fa-arrow-down" style="cursor:pointer; color:var(--text-muted);" onclick="moveSection('${sec.id}',1)"></i>
+                                <i class="fa-solid fa-pen" style="cursor:pointer; color:var(--warning);" onclick="openSectionModal('${sec.id}')"></i>
+                                <i class="fa-solid fa-trash" style="cursor:pointer; color:var(--danger);" onclick="deleteSection('${sec.id}')"></i>
+                            </div>` : ''}
+                        <div class="card-progress-bg"><div class="card-progress-fill" id="prog-${sec.id}"></div></div>
+                    </div><div style="overflow-x:auto;"><table>`;
+                
+                itemsToShow.forEach(i => {
+                    const k = `${activeSede}_${activeFolder}_${sec.id}_${i.id}`; 
+                    let st = appState[k] || {fare:false, comprare:false, n_fare:'', n_comprare:'', q:0};
+                    const cat = appStructure.sedi[activeSede].categories.find(x => x.id === i.catId) || {name:'ERR', color:'#ccc', type:'standard'};
+                    const bdg = `<span class="role-badge" style="background:${cat.color}; border-color:${cat.color};">${sanitize(cat.name).toUpperCase()}</span>`; 
+                    const expA = checkExpiry(i.expiry);
+                    
+                    let meta = "";
+                    if(cat.type !== 'magazzino') { 
+                        if(i.l) meta += `<span style="background:var(--input-bg); padding:4px 8px; border-radius:6px; border:1px solid var(--border);"><b>L:</b> ${sanitize(i.l)}</span> `; 
+                        if(i.s) meta += `<span style="background:var(--input-bg); padding:4px 8px; border-radius:6px; border:1px solid var(--border);"><b>S:</b> ${sanitize(i.s)}</span> `;
+                    } else { 
+                        if(i.idealQty) meta += `<span style="background:var(--accent-glow); color:var(--accent); padding:4px 8px; border-radius:6px; border:1px solid rgba(201, 164, 100, 0.3);"><b>Target:</b> ${i.idealQty}</span> `; 
+                        if(i.uom && i.uom.trim() !== '') meta += `<span class="uom-badge">${sanitize(i.uom)}</span> `;
+                    }
+                    if(i.supplierCatId) { const sc = (appStructure.sedi[activeSede].supplierCategories || []).find(x => x.id === i.supplierCatId); if(sc) meta += `<span style="background:var(--input-bg); padding:4px 8px; border-radius:6px; border:1px solid var(--border); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${sanitize(sc.name)}</span> `; } 
+                    else if(i.supplier) { meta += `<span style="background:var(--input-bg); padding:4px 8px; border-radius:6px; border:1px solid var(--border); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${sanitize(i.supplier)}</span> `; }
+                    if(i.info && i.info.trim() !== "") { meta += `<span class="info-badge" onclick="openInfoModal('${sec.id}','${i.id}')" style="padding:4px 8px; border-radius:6px; background:var(--accent-glow); border:1px solid rgba(201, 164, 100, 0.3); color:var(--accent); cursor:pointer;"><i class="fa-solid fa-book-open"></i> Info</span> `; }
+                    
+                    const isO = !editMode && i.days && i.days.length > 0 && !i.days.includes(cd); 
+                    if(isO) meta += ` <span style="font-size:0.7rem; color:var(--warning); font-weight:800; border:1px solid var(--warning); padding:2px 6px; border-radius:4px;"><i class="fa-solid fa-eye"></i> EXTRA</span>`;
+                    if(expA) meta += expA;
+                    
+                    let act = '';
+                    if(cat.type === 'magazzino') { 
+                        act = `<div class="qty-container"><button class="qty-btn" onclick="updateQty('${k}',-1,'${sec.id}')"><i class="fa-solid fa-minus"></i></button><input type="number" class="qty-input" id="qty-${k}" value="${st.q||0}" onblur="updateQtyDirect('${k}',this.value,'${sec.id}')" onchange="updateQtyDirect('${k}',this.value,'${sec.id}')"><button class="qty-btn plus" onclick="updateQty('${k}',1,'${sec.id}')"><i class="fa-solid fa-plus"></i></button></div>`; 
+                    } else { 
+                        act = `<div class="actions-wrapper" style="display:flex; gap:8px;"><button id="btn-comprare-${k}" class="action-chip comprare ${st.comprare?'active':''}" onclick="toggleStateAction('${k}','comprare','${sec.id}')"><i class="fa-solid fa-cart-shopping"></i></button><button id="btn-fare-${k}" class="action-chip fare ${st.fare?'active':''}" onclick="toggleStateAction('${k}','fare','${sec.id}')"><i class="fa-solid fa-check"></i></button></div>`; 
+                    }
+                    
+                    const rowClass = (st.fare && cat.type !== 'magazzino') ? 'is-done' : '';
+                    
+                    html += `
+                        <tr id="row-${k}" class="${rowClass} ${isO?'out-of-schedule':''}">
+                            <td><span class="prod-name">${sanitize(i.n)} ${bdg}</span><span class="prod-meta">${meta}</span>
+                                ${editMode && q === '' && !isFifo ? `<div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;"><button class="btn-action" style="padding:10px 16px; width:auto; border-radius:8px; background:var(--input-bg); border:1px solid var(--border); color:var(--text);" onclick="moveItem('${sec.id}','${i.id}',-1)"><i class="fa-solid fa-arrow-up"></i></button><button class="btn-action" style="padding:10px 16px; width:auto; border-radius:8px; background:var(--input-bg); border:1px solid var(--border); color:var(--text);" onclick="moveItem('${sec.id}','${i.id}',1)"><i class="fa-solid fa-arrow-down"></i></button><button class="btn-action" style="padding:10px 16px; width:auto; background:var(--warning); border:none; color:#000; border-radius:8px;" onclick="openItemModal('${sec.id}','${i.id}')"><i class="fa-solid fa-pen"></i></button><button class="btn-action" style="padding:10px 16px; width:auto; background:var(--danger); border:none; color:white; border-radius:8px;" onclick="deleteItem('${sec.id}','${i.id}')"><i class="fa-solid fa-trash"></i></button></div>` : ''}
+                            </td>
+                            <td><div class="note-wrapper" style="display:flex; flex-direction:column; gap:6px;"><input type="text" class="note-input comprare-note" style="border-left: 3px solid var(--success);" value="${sanitize(st.n_comprare)}" onblur="updateState('${k}','n_comprare',this.value)" placeholder="Note Acquisto..."><input type="text" class="note-input fare-note" style="border-left: 3px solid var(--warning);" value="${sanitize(st.n_fare)}" onblur="updateState('${k}','n_fare',this.value)" placeholder="Note Operative..."></div></td>
+                            <td>${act}</td>
+                        </tr>`;
+                });
+                
+                html += `</table></div>`;
+                if(editMode && q === '') html += `<button class="btn-action solid" style="width:100%; border-radius:0 0 var(--radius-main) var(--radius-main); margin-top:0; padding:24px;" onclick="openItemModal('${sec.id}')"><i class="fa-solid fa-plus"></i> AGGIUNGI NODO PRODOTTO</button>`;
+                crd.innerHTML = html; c.appendChild(crd); updateProgressBar(sec.id);
+            });
+            
+            if(editMode && q === '') { const b = document.createElement('button'); b.className = 'btn-action'; b.style.background = 'var(--bg)'; b.style.border = '2px dashed var(--success)'; b.style.color = 'var(--success)'; b.innerHTML = '<i class="fa-solid fa-plus"></i> COSTRUISCI CELLA LOGICA'; b.onclick = () => openSectionModal(); c.appendChild(b); }
+        }
+
+        // ==========================================================================
+        // 7. UTILITIES DI STATO OPERATIVO
+        // ==========================================================================
+        function toggleStateAction(k, t, sid) { 
+            if(!appState[k]) appState[k] = {fare:false, comprare:false, n_fare:'', n_comprare:'', q:0}; 
+            appState[k][t] = !appState[k][t]; saveState(); 
+            const b = document.getElementById(`btn-${t}-${k}`); if(b) { if(appState[k][t]) b.classList.add('active'); else b.classList.remove('active'); } 
+            if(t === 'fare') { const r = document.getElementById(`row-${k}`); if(r) { if(appState[k].fare) r.classList.add('is-done'); else r.classList.remove('is-done'); } updateProgressBar(sid); } 
+            if(navigator.vibrate && appState[k][t]) { try { navigator.vibrate(40); } catch(e){} } 
+        }
+
+        function updateState(k, f, v) { if(!appState[k]) appState[k] = {fare:false, comprare:false, n_fare:'', n_comprare:'', q:0}; appState[k][f] = sanitize(v); saveState(); }
+        function updateQty(k, d, sid) { if(!appState[k]) appState[k] = {fare:false, comprare:false, n_fare:'', n_comprare:'', q:0}; appState[k].q = Math.max(0, (appState[k].q || 0) + d); saveState(); const i = document.getElementById(`qty-${k}`); if(i) i.value = appState[k].q; if(navigator.vibrate) { try { navigator.vibrate(20); } catch(e){} } }
+        function updateQtyDirect(k, v, sid) { if(!appState[k]) appState[k] = {fare:false, comprare:false, n_fare:'', n_comprare:'', q:0}; let p = parseInt(v, 10); appState[k].q = isNaN(p) || p < 0 ? 0 : p; saveState(); const i = document.getElementById(`qty-${k}`); if(i) i.value = appState[k].q; }
+
+        function toggleHiddenItems() { showHiddenTimeGated = !showHiddenTimeGated; const b = document.getElementById('btn-show-hidden'); if(b) { b.style.background = showHiddenTimeGated ? "var(--accent)" : "var(--card)"; b.style.color = showHiddenTimeGated ? "var(--bg)" : "var(--text-muted)"; } renderContent(true); }
+        function toggleFIFO() { isFifo = !isFifo; const b = document.getElementById('btn-fifo'); if(b) { b.style.background = isFifo ? "var(--accent)" : "var(--card)"; b.style.color = isFifo ? "var(--bg)" : "var(--text-muted)"; } renderContent(true); }
+
+        function smartReset(isA = false) { 
+            if(isA || confirm("Inizializzare purga totale del turno odierno? Eliminerà spunte e check.")) { 
+                for(let k in appState) { appState[k].fare = false; appState[k].comprare = false; appState[k].n_fare = ''; appState[k].n_comprare = ''; } 
+                saveState(); renderContent(true); if(!isA) showToast("Turno resettato.", "success"); 
+            } 
+        }
+
+        function requestEditMode() { 
+            editMode = !editMode; document.body.classList.toggle('edit-mode', editMode); 
+            const b = document.getElementById('sidebar-edit-status'); 
+            if(b) { b.innerHTML = editMode ? `<i class="fa-solid fa-lock"></i> BLOCCA MODIFICHE` : `<i class="fa-solid fa-unlock"></i> SBLOCCA MATRICE`; b.style.background = editMode ? "var(--warning)" : "var(--bg)"; b.style.color = editMode ? "#000" : "var(--text)"; } 
+            document.querySelectorAll('.edit-only').forEach(e => e.style.display = editMode ? 'flex' : 'none'); renderApp(); 
+        }
+
+        // ==========================================================================
+        // 8. MANAGER STRUTTURALI (CRUD MATRICE)
+        // ==========================================================================
+        function openSedeModal(id = null) { currentEdit = { action: id ? 'edit' : 'new', id: id }; document.getElementById('input-sede-name').value = id ? appStructure.sedi[id].name : ''; showModal('modal-sede'); }
+        function saveSede() { const n = sanitize(document.getElementById('input-sede-name').value); if(!n) return; if(currentEdit.action === 'new') { const id = 'sede_' + generateId(); appStructure.sedi[id] = { id: id, name: n, folders: {}, roles: [], checklists: [], supplierCategories: [], categories: [{id: 'c1', name: 'Generale', color: '#C9A464', type: 'standard'}] }; activeSede = id; } else { appStructure.sedi[currentEdit.id].name = n; } saveStructure(); closeModals(); renderApp(); }
+        function deleteSede(id) { if(confirm("Attenzione, questo distruggerà l'intera Sede e i suoi dati. Procedere?")) { delete appStructure.sedi[id]; activeSede = Object.keys(appStructure.sedi)[0] || null; saveStructure(); renderApp(); } }
+
+        function openFolderModal(id = null) { currentEdit = { action: id ? 'edit' : 'new', id: id }; document.getElementById('input-folder-name').value = id ? appStructure.sedi[activeSede].folders[id].name : ''; showModal('modal-folder'); }
+        function saveFolder() { const n = sanitize(document.getElementById('input-folder-name').value); if(!n) return; if(currentEdit.action === 'new') { const id = 'f_' + generateId(); appStructure.sedi[activeSede].folders[id] = {id: id, name: n, sections: []}; activeFolder = id; } else { appStructure.sedi[activeSede].folders[currentEdit.id].name = n; } saveStructure(); closeModals(); renderFolders(); renderContent(true); }
+        function deleteFolder(id) { if(confirm("Smantellare questo Turno Operativo?")) { delete appStructure.sedi[activeSede].folders[id]; activeFolder = Object.keys(appStructure.sedi[activeSede].folders)[0] || null; saveStructure(); renderFolders(); renderContent(true); } }
+
+        function openSectionModal(id = null) { currentEdit = { action: id ? 'edit' : 'new', id: id }; const sc = document.getElementById('input-section-color'); sc.innerHTML = ''; appStructure.sedi[activeSede].categories.forEach(c => { sc.innerHTML += `<option value="${c.color}">${sanitize(c.name)}</option>`; }); if(id) { const s = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === id); document.getElementById('input-section-name').value = s.name; sc.value = s.color; } else { document.getElementById('input-section-name').value = ''; if(appStructure.sedi[activeSede].categories.length > 0) sc.value = appStructure.sedi[activeSede].categories[0].color; } showModal('modal-section'); }
+        function saveSection() { const n = sanitize(document.getElementById('input-section-name').value); const c = document.getElementById('input-section-color').value; if(!n) return; let arr = appStructure.sedi[activeSede].folders[activeFolder].sections; if(currentEdit.action === 'new') { arr.push({id: 's_' + generateId(), name: n, color: c, items: []}); } else { let s = arr.find(x => x.id === currentEdit.id); s.name = n; s.color = c; } saveStructure(); closeModals(); renderContent(true); }
+        function deleteSection(id) { if(confirm("Disintegrare Cella Logica e i suoi prodotti?")) { appStructure.sedi[activeSede].folders[activeFolder].sections = appStructure.sedi[activeSede].folders[activeFolder].sections.filter(x => x.id !== id); saveStructure(); renderContent(true); } }
+
+        function openCategoryManager() { const l = document.getElementById('category-list-editor'); l.innerHTML = ''; appStructure.sedi[activeSede].categories.forEach(c => { l.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--input-bg); padding:16px; border-radius:12px; margin-bottom:8px; border:1px solid var(--border);"><span style="font-weight:700;"><i class="fa-solid fa-circle" style="color:${c.color}; margin-right:12px;"></i>${sanitize(c.name)} <span style="font-size:0.75rem; color:var(--text-muted);">(${c.type})</span></span><button class="btn-action" style="width:auto; padding:10px; background:var(--card); border:1px solid var(--border); color:var(--danger);" onclick="deleteCategory('${c.id}')"><i class="fa-solid fa-trash"></i></button></div>`; }); const p = document.getElementById('color-palette'); p.innerHTML = ''; PALETTE.forEach(c => { p.innerHTML += `<div style="width:36px; height:36px; border-radius:50%; background:${c}; cursor:pointer; border:${selectedColor === c ? '4px solid var(--text)' : 'none'};" onclick="selectColor('${c}', this)"></div>`; }); showModal('modal-category-manager'); }
+        function selectColor(c, el) { selectedColor = c; document.querySelectorAll('#color-palette div').forEach(d => d.style.border = 'none'); el.style.border = '4px solid var(--text)'; }
+        function addCategory() { const n = sanitize(document.getElementById('new-cat-name').value); const t = document.getElementById('new-cat-type').value; if(!n) return; appStructure.sedi[activeSede].categories.push({id: 'cat_' + generateId(), name: n, color: selectedColor, type: t}); document.getElementById('new-cat-name').value = ''; saveStructure(); openCategoryManager(); renderCategories(); }
+        function deleteCategory(id) { if(appStructure.sedi[activeSede].categories.length > 1 && confirm("Smantellare questo Reparto? Tutti i prodotti orfani verranno riassegnati al reparto di default.")) { appStructure.sedi[activeSede].categories = appStructure.sedi[activeSede].categories.filter(x => x.id !== id); const fallbackId = appStructure.sedi[activeSede].categories[0].id; Object.values(appStructure.sedi[activeSede].folders).forEach(f => f.sections.forEach(s => s.items.forEach(i => { if(i.catId === id) i.catId = fallbackId; }))); saveStructure(); openCategoryManager(); renderCategories(); renderContent(true); } else if (appStructure.sedi[activeSede].categories.length === 1) { showToast("Errore: Impossibile recidere l'ultimo spazio logico.", "error"); } }
+
+        function openSuppliersManager() { const l = document.getElementById('suppliers-list-editor'); l.innerHTML = ''; (appStructure.sedi[activeSede].supplierCategories || []).forEach(s => { l.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--input-bg); padding:16px; border-radius:12px; margin-bottom:8px; border:1px solid var(--border);"><span style="font-weight:700;"><i class="fa-solid fa-truck" style="color:var(--accent); margin-right:12px;"></i>${sanitize(s.name)}</span><button class="btn-action" style="width:auto; padding:10px; background:var(--card); border:1px solid var(--border); color:var(--danger);" onclick="deleteSupplier('${s.id}')"><i class="fa-solid fa-trash"></i></button></div>`; }); showModal('modal-suppliers-manager'); }
+        function addSupplier() { const n = sanitize(document.getElementById('new-supplier-name').value); if(!n) return; if(!appStructure.sedi[activeSede].supplierCategories) appStructure.sedi[activeSede].supplierCategories = []; appStructure.sedi[activeSede].supplierCategories.push({id: 'sup_' + generateId(), name: n}); document.getElementById('new-supplier-name').value = ''; saveStructure(); openSuppliersManager(); }
+        function deleteSupplier(id) { if(confirm("Recidere Rete Fornitore?")) { appStructure.sedi[activeSede].supplierCategories = appStructure.sedi[activeSede].supplierCategories.filter(x => x.id !== id); Object.values(appStructure.sedi[activeSede].folders).forEach(f => f.sections.forEach(s => s.items.forEach(i => { if(i.supplierCatId === id) delete i.supplierCatId; }))); saveStructure(); openSuppliersManager(); renderContent(true); } }
+
+        function toggleRoleCategories() { const t = document.getElementById('new-role-type').value; document.getElementById('role-categories-wrapper').style.display = t === 'erp' ? 'block' : 'none'; }
+        function openRolesManager() { const l = document.getElementById('roles-list-editor'); l.innerHTML = ''; (appStructure.sedi[activeSede].roles || []).forEach(r => { const icon = r.type === 'checklist' ? 'fa-clipboard-list' : 'fa-user-shield'; const gb = r.group && r.group.trim() !== "" ? `<span style="font-size:0.75rem; color:var(--accent); display:block; margin-top:4px;">Grp: ${sanitize(r.group)}</span>` : ''; l.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--input-bg); padding:16px; border-radius:12px; margin-bottom:8px; border:1px solid var(--border);"><div><span style="font-weight:800; font-size:1.1rem; color:var(--text);"><i class="fa-solid ${icon}" style="margin-right:8px; color:var(--text-muted);"></i>${sanitize(r.name)}</span>${gb}</div><div style="display:flex; gap:10px;"><button class="btn-action secondary" style="padding:10px; width:auto; border-radius:8px;" onclick="editRole('${r.id}')"><i class="fa-solid fa-pen"></i></button><button class="btn-action" style="padding:10px; width:auto; background:var(--card); border:1px solid var(--border); color:var(--danger); border-radius:8px;" onclick="deleteRole('${r.id}')"><i class="fa-solid fa-trash"></i></button></div></div>`; }); const cc = document.getElementById('new-role-categories'); cc.innerHTML = ''; appStructure.sedi[activeSede].categories.forEach(c => { cc.innerHTML += `<label style="display:flex; align-items:center; gap:12px; font-size:0.95rem; font-weight:700;"><input type="checkbox" value="${c.id}" class="role-cat-check" checked style="width:20px; height:20px; accent-color:var(--accent);"> <i class="fa-solid fa-circle" style="color:${c.color}; font-size:0.7rem;"></i> ${sanitize(c.name)}</label>`; }); resetRoleForm(); showModal('modal-roles-manager'); }
+        function editRole(id) { const r = appStructure.sedi[activeSede].roles.find(x => x.id === id); if(!r) return; document.getElementById('edit-role-id').value = r.id; document.getElementById('new-role-name').value = r.name; document.getElementById('new-role-group').value = r.group || ''; document.getElementById('new-role-pin').value = r.pin; document.getElementById('new-role-type').value = r.type || 'erp'; toggleRoleCategories(); document.querySelectorAll('.role-cat-check').forEach(c => { c.checked = r.allowedCats && r.allowedCats.includes(c.value); }); document.getElementById('btn-cancel-role').style.display = 'block'; }
+        function resetRoleForm() { document.getElementById('edit-role-id').value = ''; document.getElementById('new-role-name').value = ''; document.getElementById('new-role-group').value = ''; document.getElementById('new-role-pin').value = ''; document.getElementById('new-role-type').value = 'erp'; toggleRoleCategories(); document.querySelectorAll('.role-cat-check').forEach(c => c.checked = true); document.getElementById('btn-cancel-role').style.display = 'none'; }
+        function saveRole() { const eid = document.getElementById('edit-role-id').value; const n = sanitize(document.getElementById('new-role-name').value); const g = sanitize(document.getElementById('new-role-group').value); const p = document.getElementById('new-role-pin').value; const t = document.getElementById('new-role-type').value; if(!n || !p) return showToast("Dati mancanti.", "error"); let a = []; if(t === 'erp') { document.querySelectorAll('.role-cat-check:checked').forEach(c => a.push(c.value)); } if(!appStructure.sedi[activeSede].roles) appStructure.sedi[activeSede].roles = []; if(eid) { let r = appStructure.sedi[activeSede].roles.find(x => x.id === eid); if(r) { r.name = n; r.group = g; r.pin = p; r.type = t; r.allowedCats = a; } } else { appStructure.sedi[activeSede].roles.push({ id: 'role_' + generateId(), name: n, group: g, pin: p, type: t, allowedCats: a }); } saveStructure(); openRolesManager(); renderAuthProfiles(); }
+        function deleteRole(id) { if(confirm("Estirpare permanentemente l'operatore?")) { appStructure.sedi[activeSede].roles = appStructure.sedi[activeSede].roles.filter(x => x.id !== id); saveStructure(); openRolesManager(); renderAuthProfiles(); } }
+
+        function copySection(id) { const s = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === id); if(s) { clipboardSection = JSON.parse(JSON.stringify(s)); showToast("Matrice acquisita in Cache.", "info"); renderContent(true); } }
+        function pasteSection() { if(!clipboardSection) return; let c = JSON.parse(JSON.stringify(clipboardSection)); c.id = 's_' + generateId(); c.name = c.name + " (Clone)"; c.items.forEach(i => i.id = 'i_' + generateId()); appStructure.sedi[activeSede].folders[activeFolder].sections.push(c); saveStructure(); renderContent(true); showToast("Innestata.", "success"); }
+        function openInfoModal(sid, iid) { const s = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === sid); if(!s) return; const i = s.items.find(x => x.id === iid); if(!i || !i.info) return; document.getElementById('read-info-title').innerText = sanitize(i.n); document.getElementById('read-info-content').innerHTML = sanitize(i.info).replace(/\n/g, '<br>'); showModal('modal-info'); }
+        function toggleItemFields() { const ci = document.getElementById('input-item-cat').value; const c = appStructure.sedi[activeSede].categories.find(x => x.id === ci); const wl = document.getElementById('wrapper-ls'); const wi = document.getElementById('wrapper-ideal'); const iu = document.getElementById('input-item-uom'); if(c && c.type === 'magazzino') { wi.style.display = 'block'; wl.style.display = 'none'; if(iu) iu.parentElement.style.display = 'block'; } else { wi.style.display = 'none'; wl.style.display = 'flex'; if(iu) iu.parentElement.style.display = 'none'; } }
+        function toggleDay(el) { const d = parseInt(el.getAttribute('data-day')); el.classList.toggle('active'); if(activeItemDays.includes(d)) activeItemDays = activeItemDays.filter(x => x !== d); else activeItemDays.push(d); el.style.background = el.classList.contains('active') ? 'var(--meandro-bg)' : 'var(--bg)'; el.style.color = el.classList.contains('active') ? 'var(--bg)' : 'var(--text-muted)'; }
+        
+        function openItemModal(sid, iid = null) { 
+            currentEdit = { action: iid ? 'edit' : 'new', secId: sid, itemId: iid }; activeItemDays = []; 
+            const sc = document.getElementById('input-item-cat'); sc.innerHTML = ''; appStructure.sedi[activeSede].categories.forEach(c => { sc.innerHTML += `<option value="${c.id}">${sanitize(c.name)}</option>`; }); 
+            const ssc = document.getElementById('input-item-supplier-cat'); ssc.innerHTML = '<option value="">-- Nessun Fornitore Specifico --</option>'; (appStructure.sedi[activeSede].supplierCategories || []).forEach(s => { ssc.innerHTML += `<option value="${s.id}">${sanitize(s.name)}</option>`; }); 
+            document.querySelectorAll('.action-chip').forEach(e => { e.classList.remove('active'); e.style.background = 'var(--bg)'; e.style.color = 'var(--text-muted)'; }); 
+            if(iid) { 
+                const i = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === sid).items.find(x => x.id === iid); 
+                document.getElementById('input-item-name').value = i.n || ''; document.getElementById('input-item-cat').value = i.catId || ''; document.getElementById('input-item-supplier-cat').value = i.supplierCatId || ''; document.getElementById('input-item-line').value = i.l || ''; document.getElementById('input-item-stock').value = i.s || ''; document.getElementById('input-item-ideal').value = i.idealQty || ''; document.getElementById('input-item-uom').value = i.uom || ''; document.getElementById('input-item-cost').value = i.cost || ''; document.getElementById('input-item-expiry').value = i.expiry || ''; document.getElementById('input-item-info').value = i.info || ''; 
+                if(i.days) { activeItemDays = i.days; i.days.forEach(d => { const c = document.querySelector(`.action-chip[data-day="${d}"]`); if(c) { c.classList.add('active'); c.style.background = 'var(--meandro-bg)'; c.style.color = 'var(--bg)'; } }); } 
+            } else { 
+                ['name','line','stock','ideal','uom','cost','expiry','info'].forEach(x => document.getElementById('input-item-'+x).value = ''); document.getElementById('input-item-supplier-cat').value = ''; 
+            } 
+            toggleItemFields(); showModal('modal-item'); 
+        }
+        
+        function saveItem() { 
+            const n = sanitize(document.getElementById('input-item-name').value); if(!n) return showToast("Manca Identificativo Prodotto", "error"); 
+            const s = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === currentEdit.secId); const ci = document.getElementById('input-item-cat').value; const c = appStructure.sedi[activeSede].categories.find(x => x.id === ci); 
+            const d = { n: n, catId: ci, supplierCatId: document.getElementById('input-item-supplier-cat').value, days: activeItemDays, cost: parseFloat(document.getElementById('input-item-cost').value) || 0, expiry: document.getElementById('input-item-expiry').value, info: sanitize(document.getElementById('input-item-info').value) }; 
+            if(c.type === 'magazzino') { d.idealQty = parseFloat(document.getElementById('input-item-ideal').value) || 0; d.uom = sanitize(document.getElementById('input-item-uom').value); d.l = ""; d.s = ""; } else { d.l = sanitize(document.getElementById('input-item-line').value); d.s = sanitize(document.getElementById('input-item-stock').value); d.idealQty = 0; d.uom = ""; } 
+            if(currentEdit.action === 'edit') { let i = s.items.find(x => x.id === currentEdit.itemId); Object.assign(i, d); } else { d.id = 'i_' + generateId(); s.items.push(d); } 
+            saveStructure(); closeModals(); renderContent(true); showToast("Nodo Generato", "success"); 
+        }
+        
+        function deleteItem(sid, iid) { if(confirm("Rimuovere Permanentemente?")) { const s = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === sid); s.items = s.items.filter(x => x.id !== iid); saveStructure(); renderContent(true); } }
+        function moveSection(sid, dir) { let a = appStructure.sedi[activeSede].folders[activeFolder].sections; let i = a.findIndex(x => x.id === sid); if(i < 0 || (dir === -1 && i === 0) || (dir === 1 && i === a.length - 1)) return; [a[i], a[i+dir]] = [a[i+dir], a[i]]; saveStructure(); renderContent(true); }
+        function moveItem(sid, iid, dir) { let a = appStructure.sedi[activeSede].folders[activeFolder].sections.find(x => x.id === sid).items; let i = a.findIndex(x => x.id === iid); if(i < 0 || (dir === -1 && i === 0) || (dir === 1 && i === a.length - 1)) return; [a[i], a[i+dir]] = [a[i+dir], a[i]]; saveStructure(); renderContent(true); }
+
+        // ==========================================================================
+        // 9. TELEMETRIA E REPORTISTICA A COMPARTIMENTI STAGNI
+        // ==========================================================================
+        function openDashboard() { 
+            if(!activeSede || !activeFolder) return; const isM = (activeProfile === 'admin'); const f = appStructure.sedi[activeSede].folders[activeFolder]; 
+            let tv = 0, ec = 0, dp = 0, tp = 0; const t = new Date(); t.setHours(0,0,0,0); 
+            f.sections.forEach(s => s.items.forEach(i => { 
+                const k = `${activeSede}_${activeFolder}_${s.id}_${i.id}`; const st = appState[k] || {fare: false, comprare: false, q: 0}; const c = appStructure.sedi[activeSede].categories.find(x => x.id === i.catId) || {type: 'standard'}; 
+                if(c.type === 'magazzino') { if(i.cost) tv += ((st.q || 0) * i.cost); } else { tp++; if(st.fare) dp++; } 
+                if(i.expiry) { let e = new Date(i.expiry); e.setHours(0,0,0,0); if(e <= t) ec++; } 
+            })); 
+            document.getElementById('dash-val').innerText = isM ? "€ " + tv.toFixed(2) : "🔒 ROOT"; document.getElementById('dash-exp').innerText = ec; document.getElementById('dash-prog').innerText = tp > 0 ? Math.round((dp/tp)*100) + "%" : "100%"; 
+            showModal('modal-dashboard'); 
+        }
+
+        let rtF = "", rtC = "", csvF = [], csvC = [];
+        
+        function switchReportTab(t) { 
+            currentReportTab = t; 
+            document.getElementById('tab-report-fare').style.background = t === 'fare' ? 'var(--card)' : 'transparent'; 
+            document.getElementById('tab-report-fare').style.color = t === 'fare' ? 'var(--accent)' : 'var(--text-muted)'; 
+            document.getElementById('tab-report-fare').style.borderColor = t === 'fare' ? 'var(--accent)' : 'transparent'; 
+            document.getElementById('tab-report-comprare').style.background = t === 'comprare' ? 'var(--card)' : 'transparent'; 
+            document.getElementById('tab-report-comprare').style.color = t === 'comprare' ? 'var(--accent)' : 'var(--text-muted)'; 
+            document.getElementById('tab-report-comprare').style.borderColor = t === 'comprare' ? 'var(--accent)' : 'transparent'; 
+            document.getElementById('report-preview-fare').style.display = t === 'fare' ? 'block' : 'none'; 
+            document.getElementById('report-preview-comprare').style.display = t === 'comprare' ? 'block' : 'none'; 
+        }
+
+        function openReportModal() { buildReports(); switchReportTab('fare'); showModal('modal-report'); if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobile-overlay').style.display = 'none'; } }
+        
+        function buildReports() { 
+            if(!activeSede || !activeFolder) return; 
+            // IL COMPARTIMENTO STAGNO: Estrae solo i dati del Turno della Sede Attiva. Impossibile contaminare.
+            const f = appStructure.sedi[activeSede].folders[activeFolder]; const isM = (activeProfile === 'admin'); const r = !isM ? appStructure.sedi[activeSede].roles.find(x => x.id === activeProfile) : null; const aC = r ? r.allowedCats : null; 
+            let fg = {}, cg = {}; csvF = []; csvC = []; 
+            
+            f.sections.forEach(s => s.items.forEach(i => { 
+                if (!isM && aC && !aC.includes(i.catId)) return; 
+                const k = `${activeSede}_${activeFolder}_${s.id}_${i.id}`; const st = appState[k] || {fare:false, comprare:false, n_fare:'', n_comprare:'', q:0}; const c = appStructure.sedi[activeSede].categories.find(x => x.id === i.catId) || {name:'N.C.', type:'standard'}; 
+                
+                if(st.fare || (st.n_fare && st.n_fare.trim() !== "")) {
+                    let cn = sanitize(c.name).toUpperCase(); if(!fg[cn]) fg[cn] = []; let nf = st.n_fare && st.n_fare.trim() !== "" ? sanitize(st.n_fare) : "Operazione Eseguita"; 
+                    fg[cn].push({p: sanitize(i.n), n: nf, s: sanitize(s.name)}); csvF.push({t: "CUCINA", g: cn, s: sanitize(s.name), p: sanitize(i.n), v: nf});
+                } 
+                
+                let aC_buy = false, tbv = ""; 
+                if(st.comprare) { aC_buy = true; tbv = st.n_comprare && st.n_comprare.trim() !== "" ? sanitize(st.n_comprare) : "Includere"; } 
+                else if(st.n_comprare && st.n_comprare.trim() !== "") { aC_buy = true; tbv = sanitize(st.n_comprare); } 
+                else if(c.type === 'magazzino' && st.q !== undefined && i.idealQty && st.q < i.idealQty) { aC_buy = true; let df = i.idealQty - st.q; let uL = i.uom && i.uom.trim() !== "" ? " " + sanitize(i.uom) : " U"; tbv = st.n_comprare && st.n_comprare.trim() !== "" ? sanitize(st.n_comprare) : ("Deficit: " + df + uL); } 
+                
+                if(aC_buy) {
+                    let sn = 'ORDINE GLOBALE'; if(i.supplierCatId) { const so = (appStructure.sedi[activeSede].supplierCategories || []).find(x => x.id === i.supplierCatId); if(so) sn = sanitize(so.name).toUpperCase(); } else if(i.supplier) { sn = sanitize(i.supplier).toUpperCase(); } 
+                    if(!cg[sn]) cg[sn] = []; cg[sn].push({p: sanitize(i.n), n: tbv, s: sanitize(s.name)}); csvC.push({t: "ORDINE", g: sn, s: sanitize(s.name), p: sanitize(i.n), v: tbv});
+                } 
+            })); 
+            
+            const rootSedeName = sanitize(appStructure.sedi[activeSede].name).toUpperCase();
+            
+            rtF = ""; if(Object.keys(fg).length > 0) { rtF += `🔪 MATRICE CUCINA [${rootSedeName}]:\n`; for(let c in fg) { rtF += `\n[ ${c} ]\n`; fg[c].forEach(p => rtF += `• ${p.p} (${p.s}): ${p.n}\n`); } } else { rtF = `✅ Nessuna operazione pendente in ${rootSedeName}.`; } 
+            rtC = ""; if(Object.keys(cg).length > 0) { rtC += `🛒 MATRICE ORDINI [${rootSedeName}]:\n`; for(let s in cg) { rtC += `\n[ ${s} ]\n`; cg[s].forEach(o => rtC += `• ${o.p}: ${o.n}\n`); } } else { rtC = `✅ Magazzino Ottimale in ${rootSedeName}.`; } 
+            
+            let hF = `<div>`; if(Object.keys(fg).length === 0) hF += `<div style="text-align:center;padding:40px;color:var(--success);"><i class="fa-solid fa-check-double" style="font-size:3rem; margin-bottom:16px;"></i><br><b>Linea Operativa Completata</b></div>`; else { for(let c in fg) { hF += `<div style="margin-bottom:16px;"><b style="color:var(--warning);font-size:0.85rem; letter-spacing:1px;">${c}</b>`; fg[c].forEach(p => { hF += `<div style="background:rgba(201,164,100,0.05);padding:16px;margin:8px 0;border-left:4px solid var(--warning);border-radius:0 12px 12px 0;"><b>${p.p}</b> <span style="font-size:0.8rem;color:var(--text-muted)">(${p.s})</span><br><span style="color:var(--accent);font-size:0.95rem; display:block; margin-top:6px;">${p.n}</span></div>`; }); hF += `</div>`; } } hF += `</div>`; document.getElementById('report-preview-fare').innerHTML = hF; 
+            let hC = `<div>`; if(Object.keys(cg).length === 0) hC += `<div style="text-align:center;padding:40px;color:var(--success);"><i class="fa-solid fa-boxes-stacked" style="font-size:3rem; margin-bottom:16px;"></i><br><b>Nessun Deficit di Rifornimento</b></div>`; else { for(let s in cg) { hC += `<div style="background:var(--card);padding:16px;border-radius:16px;border:1px solid var(--border);margin-bottom:16px;"><b style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:12px; letter-spacing:1px;"><i class="fa-solid fa-truck"></i> ${s}</b>`; cg[s].forEach(o => { hC += `<div style="display:flex;justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px dashed var(--border);"><span style="font-weight:700;">${o.p}</span><span style="background:rgba(201,164,100,0.15);color:var(--accent);padding:6px 12px;border-radius:100px;font-weight:800;font-size:0.85rem;">${o.n}</span></div>`; }); hC += `</div>`; } } hC += `</div>`; document.getElementById('report-preview-comprare').innerHTML = hC; 
+        }
+
+        function copyReportText() { const t = currentReportTab === 'fare' ? rtF : rtC; if(!t) return; if(navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(() => showToast("Testo Copiato.", "success")).catch(() => window.open("https://wa.me/?text="+encodeURIComponent(t),'_blank')); } else { window.open("https://wa.me/?text="+encodeURIComponent(t),'_blank'); } }
+        function downloadReportExcel() { const d = currentReportTab === 'fare' ? csvF : csvC; if(d.length === 0) return showToast("Matrice Vuota.", "error"); let c = "data:text/csv;charset=utf-8,\uFEFFTIPO;GRUPPO;SETTORE;PRODOTTO;DETTAGLIO\n"; d.forEach(r => c += `"${r.t}";"${r.g}";"${r.s}";"${r.p}";"${r.v}"\n`); const l = document.createElement("a"); l.setAttribute("href", encodeURI(c)); l.setAttribute("download", `Report_Scutum_${currentReportTab.toUpperCase()}.csv`); document.body.appendChild(l); l.click(); document.body.removeChild(l); }
+
+        // ==========================================================================
+        // 10. CLOUD SYNC ENGINE CON BYPASS QUANTICO
+        // ==========================================================================
+        function shareApp() { 
+            const sa = localStorage.getItem('nexus_alias'); const sh = localStorage.getItem('nexus_hub_id'); let u = ''; 
+            if(sa) u = `?alias=${sa}`; else if(sh) u = `?hub=${sh}`; 
+            const su = window.location.href.split('?')[0] + u; 
+            if(navigator.share) { navigator.share({title:'Scutum ERP', url:su}).catch(console.error); } 
+            else { navigator.clipboard.writeText(su).then(() => showToast("Link Accesso Copiato.", "success")); }
+        }
+        
+        function checkUrlParams() { 
+            try { 
+                const u = new URLSearchParams(window.location.search); const pa = u.get('alias'); const ph = u.get('hub'); 
+                if(pa) localStorage.setItem('nexus_alias', pa); if(ph) localStorage.setItem('nexus_hub_id', ph); 
+                if(pa || ph) { window.history.replaceState({}, document.title, window.location.pathname); showToast("Coordinate Cloud Identificate.", "success"); } 
+            } catch(e) {} 
+        }
+
+        // IL BYPASS QUANTICO (Risolve il problema dei nomi mnemonici bloccati dai CORS)
+        async function resolveAliasToId(a) { 
+            let cleanAlias = a.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(); 
+            
+            // Bypass Istantaneo se l'utente incolla il Codice Assoluto (Lungo)
+            if(cleanAlias && cleanAlias.length >= 24) return cleanAlias;
+            
+            // Fallback al Centralino
+            if(cleanAlias && cleanAlias.length > 0) {
+                try {
+                    let res = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/ScutumERP_${cleanAlias}`); 
+                    let v = res.ok ? await res.text() : null; 
+                    if(v && v.length > 10 && !v.includes("Error") && !v.includes("null")) return v.replace(/"/g,'').trim(); 
+                    
+                    let resFallback = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/NexusERP_${cleanAlias}`); 
+                    let vFallback = resFallback.ok ? await resFallback.text() : null; 
+                    if(vFallback && vFallback.length > 10 && !vFallback.includes("Error") && !vFallback.includes("null")) return vFallback.replace(/"/g,'').trim(); 
+                } catch(e) { return null; }
+            } 
+            return null; 
+        }
+        
+        async function registerAliasMapping(a, h) { 
+            let cleanAlias = a.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            if(cleanAlias && cleanAlias.length > 0 && cleanAlias.length < 24) {
+                try { await fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/ScutumERP_${cleanAlias}/${h}`, {method:'POST'}); } catch(e){}
+            } 
+        }
+
+        function openCloudHub() { 
+            showModal('modal-cloud'); 
+            const l = document.getElementById('cloud-versions-list'); 
+            const sa = localStorage.getItem('nexus_alias'); const sh = localStorage.getItem('nexus_hub_id'); 
+            document.getElementById('cloud-alias-input').value = sa || sh || ''; 
+            document.getElementById('cloud-status-message').style.display = 'none'; 
+            if(!sh) { l.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted); border:1px dashed var(--border); border-radius:12px;">Nessuna rete.</div>`; return; } 
+            fetchCloudVersions(sh, l); 
+        }
+
+        async function fetchCloudVersions(h, l) { 
+            l.innerHTML = `<div style="text-align:center;padding:24px;color:var(--accent);"><i class="fa-solid fa-spinner fa-spin"></i> Ping Connessione...</div>`; 
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${h}/latest`, {headers:{'X-Master-Key':CLOUD_KEY}}); 
+                if(!res.ok) throw new Error(); 
+                const d = await res.json(); 
+                if(d.record && d.record.metadata) {
+                    const m = d.record.metadata; 
+                    l.innerHTML = `
+                        <div style="background:var(--card);border:1px solid var(--border);padding:16px;border-radius:12px;display:flex;justify-content:space-between;align-items:center;">
+                            <div>
+                                <b style="font-size:1.1rem; color:var(--accent);">${sanitize(m.version_name)}</b>
+                                <div style="font-size:0.8rem;color:var(--text-muted);">${new Date(m.timestamp).toLocaleString('it-IT')}</div>
+                            </div>
+                            <div style="color:var(--success);font-weight:800; border:1px solid var(--success); padding:4px 8px; border-radius:6px;"><i class="fa-solid fa-check"></i> Online</div>
+                        </div>`;
+                } 
+            } catch(e) { l.innerHTML = "<div style='color:var(--danger);text-align:center;'>Rete Cloud Inaccessibile.</div>"; } 
+        }
+
+        async function uploadToCloudHub() { 
+            const ia = document.getElementById('cloud-alias-input').value.trim(); 
+            const vn = document.getElementById('cloud-version-name').value.trim() || `Sincronizzazione Manuale`; 
+            
+            if(!ia) return showToast("Identificativo Obbligatorio.", "error"); 
+            if(!confirm("[WARNING] Questa azione sovrascriverà l'intera memoria Cloud. Continuare?")) return; 
+            
+            const p = {metadata:{version_name:vn, timestamp:new Date().toISOString()}, data:appStructure}; 
+            showToast("Upload Dati in Corso...", "info"); 
+            
+            try {
+                let res; let rid = await resolveAliasToId(ia); 
+                
+                if(rid && rid.length >= 24) {
+                    res = await fetch(`https://api.jsonbin.io/v3/b/${rid}`, {method:'PUT', headers:{'Content-Type':'application/json','X-Master-Key':CLOUD_KEY}, body:JSON.stringify(p)}); 
+                    if(!res.ok) throw new Error();
+                } else {
+                    res = await fetch('https://api.jsonbin.io/v3/b', {method:'POST', headers:{'Content-Type':'application/json','X-Master-Key':CLOUD_KEY,'X-Bin-Name':'Scutum_ERP'}, body:JSON.stringify(p)}); 
+                    const d = await res.json(); 
+                    if(!d || !d.metadata) throw new Error(); 
+                    rid = d.metadata.id; 
+                } 
+                
+                await registerAliasMapping(ia, rid);
+                
+                let cleanAlias = ia.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                localStorage.setItem('nexus_hub_id', rid); 
+                localStorage.setItem('nexus_alias', cleanAlias.length > 0 ? cleanAlias : rid); 
+                
+                // MESSAGGIO DI BYPASS QUANTICO
+                const msgBox = document.getElementById('cloud-status-message');
+                msgBox.innerHTML = `ALLINEAMENTO COMPLETATO!<br><br><span style="font-size:0.85rem; color:var(--text); text-transform:none; font-weight:normal; line-height:1.5; display:block; margin-top:8px;">Se il sistema Alias ("Nome Corto") fallisce sugli altri dispositivi a causa del blocco della rete, non disperare. Copia e usa questo <b>Codice Assoluto</b> al posto del nome:</span><br><b style="color:var(--bg); font-size:1rem; letter-spacing:1px; user-select:all; display:inline-block; margin-top:12px; background:var(--accent); padding:10px 16px; border-radius:8px; border:2px solid #fff;">${rid}</b>`;
+                msgBox.style.display = 'block'; 
+                
+                fetchCloudVersions(rid, document.getElementById('cloud-versions-list')); 
+                showToast("Dati Caricati con Successo.", "success");
+            } catch(e) { showToast("Fallimento Server.", "error"); } 
+        }
+
+        async function downloadFromCloudHub() { 
+            const ia = document.getElementById('cloud-alias-input').value.trim(); 
+            if(!ia) return showToast("Identificativo Obbligatorio.", "error"); 
+            if(!confirm("[DANGER] Attenzione: cancellerai i tuoi dati locali sostituendoli con quelli del Cloud. Confermi?")) return; 
+            
+            showToast("Ricerca Matrice in Corso...", "info"); 
+            
+            try {
+                let rid = await resolveAliasToId(ia); 
+                if(!rid) throw new Error("ID non trovato. Usa il Codice Assoluto generato dall'Upload."); 
+                
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${rid}/latest`, {headers:{'X-Master-Key':CLOUD_KEY}}); 
+                if(!res.ok) throw new Error("Database Cloud irraggiungibile."); 
+                
+                const j = await res.json(); 
+                if(j.record && j.record.data) {
+                    appStructure = j.record.data; 
+                    
+                    let cleanAlias = ia.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    localStorage.setItem('nexus_hub_id', rid); 
+                    localStorage.setItem('nexus_alias', cleanAlias.length > 0 ? cleanAlias : rid); 
+                    
+                    saveStructure(); closeModals(); initApp(); 
+                    showToast("Matrice di Rete Acquisita.", "success");
+                }
+            } catch(e) { showToast(e.message, "error"); } 
+        }
+
+        // ==========================================================================
+        // 11. INNESCO FINALE KERNEL
+        // ==========================================================================
+        window.onload = () => { initApp(); };
+        
+    </script>
+</body>
+</html>
