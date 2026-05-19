@@ -4,14 +4,11 @@ import { Toaster } from 'react-hot-toast';
 import { useArchStore } from './arch_store/store.js';
 
 // =====================================================================
-// 1. IMPORTIAMO I VERI COMPONENTI CREATI NELLA FASE 4.2
-// Al posto della finta riga "in costruzione", ora carichiamo i file reali
+// IMPORTIAMO I COMPONENTI REALI (Addio Placeholder!)
 // =====================================================================
 import LoginGateway from './hf_views/LoginGateway';
+import DashboardCore from './hf_views/DashboardCore'; // <-- Il file che hai appena creato
 import InstallBanner from './hf_components/InstallBanner';
-
-// Manteniamo il placeholder SOLO per la Dashboard, perché la costruiremo nella Fase 4.3
-const DashboardCore = () => <div className="p-8 text-hf_success">Matrice Operativa in costruzione...</div>;
 
 function App() {
   const theme = useArchStore((state) => state.theme);
@@ -37,10 +34,7 @@ function App() {
         }} 
       />
 
-      {/* ===================================================================== */}
-      {/* 2. QUI INSERIAMO IL PROTOCOLLO CERBERO (BANNER INSTALLAZIONE) */}
-      {/* Si trova sotto il Toaster ed è attivo su tutta l'app */}
-      {/* ===================================================================== */}
+      {/* Protocollo Cerbero: Banner Installazione */}
       <InstallBanner />
 
       <div className="min-h-screen w-full bg-hf_bg text-hf_text font-sans overflow-hidden flex transition-colors duration-300">
@@ -51,7 +45,7 @@ function App() {
             element={!isAuthenticated ? <LoginGateway /> : <Navigate to="/app" replace />} 
           />
           
-          {/* Rotta Privata: Gestionale Core */}
+          {/* Rotta Privata: Gestionale Core (Ora usa il componente VERO) */}
           <Route 
             path="/app/*" 
             element={isAuthenticated ? <DashboardCore /> : <Navigate to="/login" replace />} 
