@@ -78,6 +78,17 @@ app.use((err, req, res, next) => {
     console.error(`[Architetto Critical Error]: ${err.stack}`);
     res.status(err.status || 500).json(errorResponse);
 });
+// ==========================================================================
+// INIEZIONE PROTOCOLLO LAZZARO (DATABASE & ROTTE)
+// ==========================================================================
+import lazzaro_connectDB from './lazzaro_database/connection.js';
+import lazzaro_routes from './routes/lazzaro_routes.js';
+
+// Avvio della Connessione al Database
+lazzaro_connectDB();
+
+// Aggancio degli Endpoints
+app.use('/api/v1/lazzaro', lazzaro_routes);
 
 // 6. AVVIO HARDWARE
 const arch_server_instance = app.listen(arch_config.server.port, () => {
