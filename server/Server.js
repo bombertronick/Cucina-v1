@@ -22,6 +22,15 @@ app.use(express.json({ limit: '10mb' })); // Protezione da payload massivi
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 2. CONFIGURAZIONE CONTROLLO ACCESSI (CORS PRE-CERBERO)
+// ==========================================================================
+// INIEZIONE PROTOCOLLO CERBERO (SICUREZZA GLOBALE PERIMETRALE)
+// ==========================================================================
+import cerbero_headers from './cerbero_security/headers.js';
+import cerbero_limiter from './cerbero_security/limiter.js';
+
+app.use(cerbero_headers); // Blindatura degli Header HTTP
+app.use(cerbero_limiter); // Sistema anti-allagamento richieste (Rate Limit)
+
 const whitelist = ['http://localhost:3000', 'http://localhost:5173']; // URL tipici di React/Vite
 const corsOptions = {
     origin: function (origin, callback) {
