@@ -3,8 +3,14 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useArchStore } from './arch_store/store.js';
 
-// Placeholder temporanei per le View che scriveremo nella FASE 4.2
-const LoginGateway = () => <div className="p-8 text-hf_accent">Gateway Login in costruzione...</div>;
+// =====================================================================
+// 1. IMPORTIAMO I VERI COMPONENTI CREATI NELLA FASE 4.2
+// Al posto della finta riga "in costruzione", ora carichiamo i file reali
+// =====================================================================
+import LoginGateway from './hf_views/LoginGateway';
+import InstallBanner from './hf_components/InstallBanner';
+
+// Manteniamo il placeholder SOLO per la Dashboard, perché la costruiremo nella Fase 4.3
 const DashboardCore = () => <div className="p-8 text-hf_success">Matrice Operativa in costruzione...</div>;
 
 function App() {
@@ -30,6 +36,12 @@ function App() {
           }
         }} 
       />
+
+      {/* ===================================================================== */}
+      {/* 2. QUI INSERIAMO IL PROTOCOLLO CERBERO (BANNER INSTALLAZIONE) */}
+      {/* Si trova sotto il Toaster ed è attivo su tutta l'app */}
+      {/* ===================================================================== */}
+      <InstallBanner />
 
       <div className="min-h-screen w-full bg-hf_bg text-hf_text font-sans overflow-hidden flex transition-colors duration-300">
         <Routes>
