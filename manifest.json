@@ -1,0 +1,19 @@
+// File: manifest.json
+{
+  "name": "Scutum ERP Absolute",
+  "short_name": "Scutum",
+  "description": "Infrastruttura Logistica Inter-Sede e Controllo Matrice",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0D0907",
+  "theme_color": "#C9A464",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%230D0907'/><path fill='%23C9A464' d='M256 0c-35.3 0-64 28.7-64 64V96H128c-35.3 0-64 28.7-64 64v32 64c0 144.1 113.8 256 256 256s256-111.9 256-256V192 160c0-35.3-28.7-64-64-64H320V64c0-35.3-28.7-64-64-64zM256 64h.1c0 0 0 0 0 0H256v64h-64V64c0-11.3 5.4-21.2 13.6-27.3C212.1 32 231.8 32 256 64z'/></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
