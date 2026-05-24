@@ -9,61 +9,40 @@
     
     <title>Scutum ERP V15.8 Absolute</title>
     
-    <!-- FORZATURA CACHE SUI CSS -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     
-    <!-- CONSOLE DI EMERGENZA -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 
-    <link rel="stylesheet" href="css/theme.css?v=Absolute1">
-    <link rel="stylesheet" href="css/layout.css?v=Absolute1">
-
-    <!-- DIAGNOSTICA HARDWARE INLINE -->
-    <script>
-        // 1. Omicidio mirato del Service Worker (PWA Cache)
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    registration.unregister();
-                }
-            });
-        }
-        
-        // 2. Paracadute di base. Se app.js carica, questa funzione verrà sovrascritta.
-        window.performLogin = () => {
-            alert("DIAGNOSI HARDWARE: Il motore (app.js) si è rifiutato di caricarsi.\n\nApri Eruda, clicca su 'All' o 'Network' e guarda quale file rosso dà errore 404. Hai rinominato male una cartella su GitHub.");
-        };
-    </script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/layout.css">
 </head>
 <body>
     <div id="toast-container"></div>
 
     <div id="app-root">
-        <!-- VISTA A: AUTENTICAZIONE -->
-        <div id="auth-screen" class="spa-view active" style="justify-content: center; align-items: center; padding: 24px; pointer-events: auto !important;">
-            <div class="card" style="width: 100%; max-width: 400px; padding: 32px; text-align: center; border: 1px solid var(--accent); pointer-events: auto !important;">
+        <div id="auth-screen" class="spa-view active" style="display: flex; justify-content: center; align-items: center; padding: 24px; pointer-events: auto !important;">
+            <div class="card" style="width: 100%; max-width: 400px; padding: 32px; text-align: center; border: 1px solid var(--accent);">
                 <i class="fa-solid fa-shield-halved" style="font-size: 4rem; color: var(--accent); margin-bottom: 24px;"></i>
                 <h2 style="color: var(--accent); margin-bottom: 8px; letter-spacing: 2px;">SCUTUM ERP</h2>
-                <p style="color: var(--text-muted); margin-bottom: 32px; font-weight: 700;">IDENTIFICAZIONE ROOT</p>
+                <p id="boot-status" style="color: var(--text-muted); margin-bottom: 32px; font-weight: 700;">INIZIALIZZAZIONE MOTORE...</p>
                 
                 <div class="input-group">
                     <input type="number" pattern="[0-9]*" inputmode="numeric" id="login-password" placeholder="PIN" 
-                           style="text-align: center; letter-spacing: 8px; font-size: 1.5rem; -webkit-user-select: text !important; user-select: text !important; pointer-events: auto !important; width: 100%;">
+                           style="text-align: center; letter-spacing: 8px; font-size: 1.5rem; width: 100%;">
                 </div>
                 
-                <button class="btn-action solid" onclick="window.performLogin()" style="margin-top: 24px; width: 100%;">
+                <button class="btn-action solid" onclick="if(window.performLogin) { window.performLogin(); } else { alert('Il motore JavaScript non è ancora avviato o è in crash.'); }" style="margin-top: 24px; width: 100%;">
                     <i class="fa-solid fa-fingerprint"></i> ACCEDI
                 </button>
             </div>
         </div>
         
-        <!-- VISTA B: HUB CHECKLIST -->
-        <div id="checklist-hub" class="spa-view" style="padding: 24px;">
+        <div id="checklist-hub" class="spa-view" style="display: none; padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
                 <h1 style="font-weight: 800; font-size: 1.5rem;">LINEA DI SPUNTA</h1>
                 <button class="btn-action" style="width:auto; padding:12px;" onclick="window.logout();"><i class="fa-solid fa-power-off"></i></button>
@@ -71,8 +50,7 @@
             <div id="checklist-content"></div>
         </div>
         
-        <!-- VISTA C: GESTIONALE PRINCIPALE -->
-        <div id="app-wrapper" class="spa-view" style="flex-direction: row;">
+        <div id="app-wrapper" class="spa-view" style="display: none; flex-direction: row;">
             <aside class="sidebar" id="main-sidebar">
                 <div class="sidebar-logo">
                     <i class="fa-solid fa-shield-halved"></i> SCUTUM
@@ -85,7 +63,7 @@
                 <div style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">FILTRI MATRICE</div>
                 <div id="categories-filter-menu"></div>
                 
-                <div class="nav-item nexus" data-action="openNexusHub" onclick="window.switchSpaView('nexus-hub'); window.renderNexusHub?.();">
+                <div class="nav-item nexus" onclick="window.switchSpaView('nexus-hub'); window.renderNexusHub?.();">
                     <i class="fa-solid fa-fire-burner"></i> HUB NEXUS
                 </div>
 
@@ -119,8 +97,7 @@
             </main>
         </div>
         
-        <!-- VISTA D: HUB NEXUS LOGISTICO -->
-        <div id="nexus-hub" class="spa-view" style="padding: 24px; overflow-y: auto; height: 100%;">
+        <div id="nexus-hub" class="spa-view" style="display: none; padding: 24px; overflow-y: auto; height: 100%;">
             <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 32px;">
                 <button class="btn-action" style="width: auto; padding: 12px 20px;" onclick="window.switchSpaView('app-wrapper');"><i class="fa-solid fa-arrow-left"></i></button>
                 <h1 style="font-weight: 800; font-size: 1.5rem; color: var(--nexus);">NEXUS LOGISTICA</h1>
@@ -129,10 +106,35 @@
         </div>
     </div>
 
-    <!-- LAYER MODALI VUOTO -->
     <div id="modal-layer"></div>
 
-    <!-- FORZATURA CACHE SUL MOTORE JAVASCRIPT -->
-    <script type="module" src="./js/app.js?v=Absolute1"></script>
+    <script type="module">
+        async function runBootloader() {
+            try {
+                const statusStr = document.getElementById('boot-status');
+                statusStr.innerText = "CARICAMENTO MODULI ES6...";
+                
+                // Forza il bypass della cache di GitHub aggiungendo il timestamp
+                await import('./js/app.js?bypass=' + new Date().getTime());
+                
+                statusStr.innerText = "MOTORE ONLINE. INSERISCI PIN.";
+                statusStr.style.color = "var(--success)";
+            } catch (error) {
+                console.error(error);
+                alert("CRASH FATALE RILEVATO!\n\nMessaggio: " + error.message + "\n\nSe dice 'Failed to fetch' hai nominato male una cartella. Se dice 'SyntaxError' c'è un errore di battitura nel codice.");
+                document.getElementById('boot-status').innerText = "CRASH LOGICO. LEGGI IL POP-UP.";
+                document.getElementById('boot-status').style.color = "var(--danger)";
+            }
+        }
+        
+        // Disattivazione Service Worker vecchio
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) { registration.unregister(); }
+            });
+        }
+
+        runBootloader();
+    </script>
 </body>
 </html>
