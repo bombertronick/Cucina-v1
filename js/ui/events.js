@@ -2,6 +2,11 @@
 import { State } from '../core/state.js';
 import { saveState } from '../core/lazzaro.js';
 
+/**
+ * ============================================================================
+ * INTERFACCIA UTENTE: ROUTING INTERNO (SPA) E FEEDBACK
+ * ============================================================================
+ */
 export function switchSpaView(viewId) {
     document.querySelectorAll('.spa-view').forEach(view => {
         view.classList.remove('active');
@@ -125,30 +130,42 @@ window.pasteSection = async () => {
 
 /**
  * ============================================================================
- * INIEZIONE E GESTIONE MODALE CLOUD VAULT
+ * INIEZIONE E GESTIONE MODALE CLOUD VAULT & BACKUP FISICO
  * ============================================================================
  */
 function injectCloudModal() {
     if (document.getElementById('modal-cloud')) return;
     const modalHTML = `
         <div id="modal-cloud" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 style="margin-bottom: 24px; color: var(--nexus);"><i class="fa-solid fa-cloud"></i> CLOUD VAULT</h2>
-                <div class="input-group">
-                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">JSONBIN ID</label>
-                    <input type="text" id="input-cloud-bin" placeholder="Es. 65c...a12">
+            <div class="modal-box" style="max-width: 450px;">
+                <h2 style="margin-bottom: 24px; color: var(--nexus);"><i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI</h2>
+                
+                <div style="border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 0.8rem; font-weight: 800; color: var(--nexus); margin-bottom: 12px; letter-spacing:1px;">SINCRONIZZAZIONE VAULT (CLOUD)</div>
+                    <div class="input-group" style="margin-bottom: 12px;">
+                        <input type="text" id="input-cloud-bin" placeholder="JSONBIN BIN ID">
+                    </div>
+                    <div class="input-group" style="margin-bottom: 16px;">
+                        <input type="password" id="input-cloud-api" placeholder="MASTER API KEY">
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn-action" style="background: rgba(46, 204, 113, 0.1); color: var(--success); border-color: var(--success); padding: 12px;" onclick="window.forceCloudPull()"><i class="fa-solid fa-cloud-arrow-down"></i> PULL CLOUD</button>
+                        <button class="btn-action" style="background: rgba(155, 89, 182, 0.1); color: var(--nexus); border-color: var(--nexus); padding: 12px;" onclick="window.forceCloudPush()"><i class="fa-solid fa-cloud-arrow-up"></i> PUSH CLOUD</button>
+                    </div>
                 </div>
-                <div class="input-group">
-                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">MASTER API KEY</label>
-                    <input type="password" id="input-cloud-api" placeholder="Es. $2a$10$...">
+
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 0.8rem; font-weight: 800; color: var(--accent); margin-bottom: 12px; letter-spacing:1px;">LEGACY BRIDGE (BACKUP LOCALE)</div>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn-action" style="background: rgba(201, 164, 100, 0.1); color: var(--accent); border-color: var(--accent); padding: 12px;" onclick="window.triggerLocalExport()"><i class="fa-solid fa-file-export"></i> ESPORTA JSON</button>
+                        <button class="btn-action" style="background: rgba(255, 255, 255, 0.05); padding: 12px;" onclick="document.getElementById('input-backup-file').click()"><i class="fa-solid fa-file-import"></i> IMPORTA JSON</button>
+                    </div>
+                    <input type="file" id="input-backup-file" accept=".json" style="display:none;" onchange="window.triggerLocalImport(this)">
                 </div>
-                <div style="display: flex; gap: 12px; margin-bottom: 24px;">
-                    <button class="btn-action" style="background: rgba(46, 204, 113, 0.1); color: var(--success); border-color: var(--success);" onclick="window.forceCloudPull()"><i class="fa-solid fa-cloud-arrow-down"></i> PULL MANUALE</button>
-                    <button class="btn-action" style="background: rgba(155, 89, 182, 0.1); color: var(--nexus); border-color: var(--nexus);" onclick="window.forceCloudPush()"><i class="fa-solid fa-cloud-arrow-up"></i> PUSH MANUALE</button>
-                </div>
+                
                 <div style="display: flex; gap: 16px; margin-top: auto;">
                     <button class="btn-action" onclick="window.closeModals();">CHIUDI</button>
-                    <button class="btn-action solid" style="background: var(--nexus);" onclick="window.saveCloudCredentialsLogic()">SALVA CHIAVI</button>
+                    <button class="btn-action solid" style="background: var(--accent); color: var(--bg);" onclick="window.saveCloudCredentialsLogic()">SALVA CHIAVI CLOUD</button>
                 </div>
             </div>
         </div>
@@ -185,7 +202,7 @@ window.forceCloudPull = async () => {
         return;
     }
     window.haptic(30);
-    window.showToast("Download dal Cloud in corso...", "info");
+    window.showToast("Download dal Cloud...", "info");
     try {
         await window.syncPullCloud();
         window.showToast("Sincronizzazione PULL completata.", "success");
@@ -201,7 +218,7 @@ window.forceCloudPush = async () => {
         return;
     }
     window.haptic(30);
-    window.showToast("Upload nel Cloud in corso...", "info");
+    window.showToast("Upload nel Cloud...", "info");
     try {
         await window.syncPushCloud();
         window.showToast("Sincronizzazione PUSH completata.", "success");
@@ -211,8 +228,65 @@ window.forceCloudPush = async () => {
     }
 };
 
+/**
+ * ============================================================================
+ * INTERFACCIA LEGACY BRIDGE (Esecuzione Import/Export)
+ * ============================================================================
+ */
+window.triggerLocalExport = async () => {
+    window.haptic(30);
+    try {
+        if (window.exportLocalBackup) {
+            await window.exportLocalBackup();
+            window.showToast("File JSON generato con successo.", "success");
+        }
+    } catch (e) {
+        window.showToast("Fallimento Esportazione: " + e.message, "error");
+    }
+};
+
+window.triggerLocalImport = async (input) => {
+    window.haptic(40);
+    const file = input.files[0];
+    if (!file) return;
+
+    const rasi AlSuolo = confirm("ATTENZIONE CRITICA:\nL'importazione di questo archivio sovrascriverà interamente il database locale ed eliminerà la configurazione corrente delle Sedi e dei Prodotti.\n\nVuoi procedere con la sovrascrittura forzata?");
+    
+    if (!rasiAlSuolo) {
+        input.value = '';
+        return;
+    }
+
+    window.showToast("Ricostruzione matrice in corso...", "info");
+    try {
+        if (window.importLocalBackup) {
+            await window.importLocalBackup(file);
+            window.showToast("Matrice ripristinata correttamente.", "success");
+            window.closeModals();
+            if (window.renderApp) window.renderApp();
+        }
+    } catch (e) {
+        window.showToast("Ripristino fallito: File corrotto.", "error");
+    }
+    input.value = ''; // Resetta il selettore hardware del telefono
+};
+
 window.closeModals = () => {
     window._editContext = null;
     document.getElementById('modal-layer').style.display = 'none';
-    document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    document.getElementById('modal-sede').style.display = 'none';
+    document.getElementById('modal-folder').style.display = 'none';
+    document.getElementById('modal-section').style.display = 'none';
+    
+    const modalCloud = document.getElementById('modal-cloud');
+    if (modalCloud) modalCloud.style.display = 'none';
+    
+    const modalItem = document.getElementById('modal-item');
+    if (modalItem) modalItem.style.display = 'none';
+
+    const modalOpList = document.getElementById('modal-operator-list');
+    if (modalOpList) modalOpList.style.display = 'none';
+
+    const modalOpDetail = document.getElementById('modal-operator-detail');
+    if (modalOpDetail) modalOpDetail.style.display = 'none';
 };
