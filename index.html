@@ -9,7 +9,6 @@
     
     <title>Scutum ERP V15.8 Absolute</title>
     
-    <link rel="manifest" href="manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -20,6 +19,30 @@
 
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/layout.css">
+
+    <script>
+        // 1. Distruzione aggressiva della cache PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                    console.warn("[Emergenza] Service Worker soppresso. Cache liberata.");
+                }
+            });
+        }
+        
+        // 2. Sensore di schianto moduli e file mancanti
+        window.addEventListener('error', function(e) {
+            if(e.message && e.message.includes('module')) {
+                alert("CRASH MODULO RILEVATO!\nControlla le maiuscole e le cartelle su GitHub.\nErrore: " + e.message);
+            }
+        }, true);
+
+        // 3. Fallback per il bottone di Login (Viene sovrascritto se app.js parte correttamente)
+        window.performLogin = () => {
+            alert("SISTEMA BLOCCATO: Il cervello (app.js) non si è avviato.\nApri la console Eruda in basso a destra, ricarica la pagina, e leggi la PRIMA riga rossa in alto. Lì c'è il file che sta facendo crashare tutto.");
+        };
+    </script>
 </head>
 <body>
     <div id="toast-container"></div>
@@ -106,41 +129,7 @@
         </div>
     </div>
 
-    <div id="modal-layer">
-        <div id="modal-sede" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 style="margin-bottom: 24px; color: var(--accent);">SEDE</h2>
-                <div class="input-group"><input type="text" id="input-sede-name" placeholder="Nome Sede"></div>
-                <div style="display: flex; gap: 16px; margin-top: auto;">
-                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
-                    <button class="btn-action solid" onclick="window.saveSedeLogic()">SALVA</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="modal-folder" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 style="margin-bottom: 24px; color: var(--accent);">TURNO</h2>
-                <div class="input-group"><input type="text" id="input-folder-name" placeholder="Nome Turno"></div>
-                <div style="display: flex; gap: 16px; margin-top: auto;">
-                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
-                    <button class="btn-action solid" onclick="window.saveFolderLogic()">SALVA</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="modal-section" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 style="margin-bottom: 24px; color: var(--accent);">CELLA LOGICA</h2>
-                <div class="input-group"><input type="text" id="input-section-name" placeholder="Nome Gruppo"></div>
-                <div class="input-group"><select id="input-section-color"></select></div>
-                <div style="display: flex; gap: 16px; margin-top: auto;">
-                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
-                    <button class="btn-action solid" onclick="window.saveSectionLogic()">SALVA</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div id="modal-layer"></div>
 
     <script type="module" src="./js/app.js"></script>
 </body>
