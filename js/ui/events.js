@@ -245,12 +245,13 @@ window.triggerLocalExport = async () => {
     }
 };
 
+// ERRORE CRITICO SANATO: rimosso spazio dalla costante rasiAlSuolo
 window.triggerLocalImport = async (input) => {
     window.haptic(40);
     const file = input.files[0];
     if (!file) return;
 
-    const rasi AlSuolo = confirm("ATTENZIONE CRITICA:\nL'importazione di questo archivio sovrascriverà interamente il database locale ed eliminerà la configurazione corrente delle Sedi e dei Prodotti.\n\nVuoi procedere con la sovrascrittura forzata?");
+    const rasiAlSuolo = confirm("ATTENZIONE CRITICA:\nL'importazione di questo archivio sovrascriverà interamente il database locale ed eliminerà la configurazione corrente delle Sedi e dei Prodotti.\n\nVuoi procedere con la sovrascrittura forzata?");
     
     if (!rasiAlSuolo) {
         input.value = '';
