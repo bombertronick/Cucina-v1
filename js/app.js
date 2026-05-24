@@ -9,7 +9,7 @@ import './ui/renderer.js';
 import './ui/nexus.js';
 
 // ============================================================================
-// ESPOSIZIONE GLOBALE DELLE API DI RETE (Per i bottoni dell'interfaccia)
+// ESPOSIZIONE GLOBALE DELLE API DI RETE
 // ============================================================================
 window.syncPullCloud = syncPullCloud;
 window.syncPushCloud = syncPushCloud;
@@ -54,27 +54,49 @@ function routeUser() {
         }
     }
     
-    const isAdmin = State.activeProfile === 'admin';
-    
-    if (!isAdmin) { 
-        switchSpaView('checklist-hub'); 
-    } else { 
-        if (window.renderApp) window.renderApp(); 
-        switchSpaView('app-wrapper'); 
-    } 
+    // Tutti gli utenti vengono instradati alla Matrice. 
+    // Il renderer.js si occuperà di nascondere i tasti di modifica per i NON-Admin.
+    if (window.renderApp) window.renderApp(); 
+    switchSpaView('app-wrapper'); 
 }
 
 window.performLogin = async () => {
-    const pin = document.getElementById('login-password').value;
+    const pin = document.getElementById('login-password').value.trim();
+    if (!pin) return;
     
+    // 1. Controllo Accesso ROOT (Amministratore Assoluto)
     if (Cerbero.isSystemVirgin()) {
         console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
         Cerbero.setupRootSignature(pin || '0000');
         finalizeLogin('admin');
+        return;
     } else if (Cerbero.verifyRootSignature(pin)) {
         finalizeLogin('admin');
+        return;
+    } 
+
+    // 2. Controllo Accesso Operatore Base (Scansione Matrice)
+    let foundOperator = null;
+    let foundSedeId = null;
+    
+    Object.keys(State.appStructure.sedi).forEach(sedeId => {
+        const sede = State.appStructure.sedi[sedeId];
+        if (sede.roles) {
+            const op = sede.roles.find(r => r.pin === pin);
+            if (op) {
+                foundOperator = op;
+                foundSedeId = sedeId;
+            }
+        }
+    });
+
+    if (foundOperator) {
+        // Forza l'operatore a visualizzare la sede a cui è stato assegnato
+        State.activeSede = foundSedeId;
+        State.activeFolder = Object.keys(State.appStructure.sedi[foundSedeId].folders)[0] || null;
+        finalizeLogin(foundOperator.id);
     } else {
-        showToast("Firma Root Respinta. PIN Errato.", "error");
+        showToast("Firma Respinta. PIN Errato o inesistente.", "error");
         haptic(50);
     }
     
@@ -85,7 +107,9 @@ window.performLogin = async () => {
 function finalizeLogin(profileId) { 
     State.activeProfile = profileId; 
     localStorage.setItem('nexus_session', profileId); 
-    showToast("Accesso Consentito. Benvenuto ROOT.", "success"); 
+    
+    const msg = profileId === 'admin' ? "Accesso Consentito. Benvenuto ROOT." : "Identificazione operatore confermata.";
+    showToast(msg, "success"); 
     routeUser(); 
 }
 
