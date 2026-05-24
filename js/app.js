@@ -3,8 +3,11 @@ import { initDatabase, saveState } from './core/lazzaro.js';
 import { State } from './core/state.js';
 import { Cerbero } from './core/cerbero.js';
 import { showToast, switchSpaView, haptic } from './ui/events.js';
-import { renderApp, applyRolePermissions } from './ui/renderer.js';
+
+// Pre-Caricamento dei Moduli Visivi (Verranno eseguiti non appena li creerai nel prossimo step)
+import './ui/renderer.js';
 import './ui/nexus.js';
+
 /**
  * ============================================================================
  * BOOTLOADER GLOBALE E GESTIONE SESSIONI
@@ -17,74 +20,72 @@ async function bootSystem() {
         console.info("[Bootloader] Motore database allineato. Avvio controlli di sicurezza...");
         
         checkAuthentication();
-        
     } catch (e) {
         console.error("[Fatal Error]", e);
-        showToast(e.message, "error");
+        showToast("Errore critico avvio sistema.", "error");
     }
 }
 
 function checkAuthentication() { 
-    if (!State.activeProfile) { 
+    const session = localStorage.getItem('nexus_session');
+    if (!session) { 
         switchSpaView('auth-screen'); 
     } else {
+        State.activeProfile = session;
         routeUser(); 
     }
 }
 
 function routeUser() { 
-    // Assicurati che ci sia una sede attiva selezionata
     if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) {
         const primeSede = Object.keys(State.appStructure.sedi)[0];
         if (primeSede) {
             State.activeSede = primeSede;
             State.activeFolder = Object.keys(State.appStructure.sedi[primeSede].folders)[0] || null;
         } else {
-            State.activeProfile = null;
-            localStorage.removeItem('nexus_session');
-            window.location.reload();
-            return;
+            // Se non ci sono sedi, forza la creazione (Sblocco interfaccia)
+            State.activeSede = null; 
         }
     }
     
-    // Controlla se l'utente è un operatore base (Checklist) o un Manager
-    const role = State.activeProfile !== 'admin' ? State.appStructure.sedi[State.activeSede]?.roles?.find(x => x.id === State.activeProfile) : null; 
+    const isAdmin = State.activeProfile === 'admin';
     
-    if (role && role.type === 'checklist') { 
+    if (!isAdmin) { 
         switchSpaView('checklist-hub'); 
     } else { 
-        applyRolePermissions(); 
-        renderApp(); 
+        if (window.renderApp) window.renderApp(); 
         switchSpaView('app-wrapper'); 
     } 
 }
 
-// IL MOTORE DI LOGIN (CON GRIMALDELLO ATTIVATO)
 window.performLogin = async () => {
     const pin = document.getElementById('login-password').value;
     
-    // AZZERAMENTO FORZATO: Ignora i vecchi dati e salva questo nuovo PIN
-    console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
-    Cerbero.setupRootSignature(pin || '0000');
-    
-    // Sblocca le porte
-    finalizeLogin('admin');
+    if (Cerbero.isSystemVirgin()) {
+        console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
+        Cerbero.setupRootSignature(pin || '0000');
+        finalizeLogin('admin');
+    } else if (Cerbero.verifyRootSignature(pin)) {
+        finalizeLogin('admin');
+    } else {
+        showToast("Firma Root Respinta. PIN Errato.", "error");
+        haptic(50);
+    }
     
     document.getElementById('login-password').value = ''; 
     haptic();
 };
 
-
 function finalizeLogin(profileId) { 
     State.activeProfile = profileId; 
     localStorage.setItem('nexus_session', profileId); 
-    showToast("Accesso Consentito. Benvenuto Architetto.", "success"); 
+    showToast("Accesso Consentito. Benvenuto ROOT.", "success"); 
     routeUser(); 
 }
 
 /**
  * ============================================================================
- * VISIBILITY API (Heartbeat Passivo Mezzanotte)
+ * VISIBILITY API (Purificazione Notturna Automatica)
  * ============================================================================
  */
 document.addEventListener('visibilitychange', () => {
@@ -100,22 +101,17 @@ document.addEventListener('visibilitychange', () => {
             
             saveState().then(() => {
                 localStorage.setItem('nexus_day', currentStamp);
-                localStorage.setItem('nexus_bkp_' + currentStamp.replace(/\//g, '-'), JSON.stringify(State.appStructure));
                 showToast("Nuovo Turno Inizializzato automaticamente.", "info");
-                renderApp(); 
+                if (window.renderApp) window.renderApp(); 
             });
         }
     }
 });
 
-// Registrazione del Service Worker PWA
+// Avvio applicazione PWA
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then((registration) => {
-            console.info('[PWA] Service Worker Allacciato con successo');
-        }).catch((err) => {
-            console.warn('[PWA] Fallimento allacciamento Service Worker:', err);
-        });
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
     });
 }
 
