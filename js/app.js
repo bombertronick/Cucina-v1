@@ -4,7 +4,7 @@ import { State } from './core/state.js';
 import { Cerbero } from './core/cerbero.js';
 import { showToast, switchSpaView, haptic } from './ui/events.js';
 import { renderApp, applyRolePermissions } from './ui/renderer.js';
-
+import './ui/nexus.js';
 /**
  * ============================================================================
  * BOOTLOADER GLOBALE E GESTIONE SESSIONI
