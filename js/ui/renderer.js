@@ -1,52 +1,66 @@
 // File: js/ui/renderer.js
 import { State } from '../core/state.js';
 
-// ============================================================================
-// CONTROLLER DI ACCESSO
-// ============================================================================
-export function applyRolePermissions() {
+/**
+ * ============================================================================
+ * CONTROLLER DI ACCESSO
+ * ============================================================================
+ */
+function applyRolePermissions() {
     const isAdmin = State.activeProfile === 'admin';
-    document.getElementById('floating-paste-btn').style.display = (isAdmin && State.clipboardSection) ? 'flex' : 'none';
-    document.getElementById('current-user-label').innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : 'OPERATORE STANDARD';
+    const pasteBtn = document.getElementById('floating-paste-btn');
+    if (pasteBtn) {
+        pasteBtn.style.display = (isAdmin && State.clipboardSection) ? 'flex' : 'none';
+    }
+    
+    const userLabel = document.getElementById('current-user-label');
+    if (userLabel) {
+        userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : 'OPERATORE STANDARD';
+    }
 }
 
-// ============================================================================
-// RENDERER PRINCIPALE
-// ============================================================================
-export function renderApp() {
-    if (!State.activeSede) return;
+/**
+ * ============================================================================
+ * RENDERER PRINCIPALE
+ * ============================================================================
+ */
+window.renderApp = () => {
+    if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
+        State.activeSede = Object.keys(State.appStructure.sedi)[0];
+    }
     
     applyRolePermissions();
     renderSidebar();
     renderFolders();
     renderMainContent();
-}
+};
 
-// ============================================================================
-// RENDERER: SIDEBAR (Sedi e Filtri)
-// ============================================================================
+/**
+ * ============================================================================
+ * RENDERER: SIDEBAR (Sedi e Filtri)
+ * ============================================================================
+ */
 function renderSidebar() {
     const sediMenu = document.getElementById('sedi-menu');
+    if (!sediMenu) return;
+    
     const isAdmin = State.activeProfile === 'admin';
     sediMenu.innerHTML = '';
 
-    // Disegna le Sedi
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
         div.className = `nav-item ${State.activeSede === sedeId ? 'active' : ''}`;
         div.innerHTML = `<i class="fa-solid fa-shield"></i> ${sede.name}`;
         
-        // Seleziona la sede
         div.onclick = () => {
             State.activeSede = sedeId;
             State.activeFolder = Object.keys(State.appStructure.sedi[sedeId].folders)[0] || null;
             State.activeFilter = null; 
-            renderApp();
+            window.renderApp();
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
         };
 
-        // Long press per Modifica Sede (Solo Admin)
         if (isAdmin) {
             let pressTimer;
             div.onmousedown = div.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editSede(sedeId), 800); };
@@ -55,7 +69,6 @@ function renderSidebar() {
         sediMenu.appendChild(div);
     });
 
-    // Bottone Aggiungi Sede
     if (isAdmin) {
         const addSedeBtn = document.createElement('div');
         addSedeBtn.className = 'nav-item add-btn';
@@ -64,14 +77,14 @@ function renderSidebar() {
         sediMenu.appendChild(addSedeBtn);
     }
 
-    // Disegna Filtri Categorie (Globali per la Sede)
     const filtersMenu = document.getElementById('categories-filter-menu');
+    if (!filtersMenu) return;
     filtersMenu.innerHTML = '';
     
     const allFilter = document.createElement('div');
     allFilter.className = `nav-item ${!State.activeFilter ? 'active' : ''}`;
     allFilter.innerHTML = `<i class="fa-solid fa-border-all"></i> Spazio Globale`;
-    allFilter.onclick = () => { State.activeFilter = null; renderApp(); };
+    allFilter.onclick = () => { State.activeFilter = null; window.renderApp(); };
     filtersMenu.appendChild(allFilter);
 
     const categories = getUniqueCategories(State.activeSede);
@@ -79,16 +92,20 @@ function renderSidebar() {
         const catDiv = document.createElement('div');
         catDiv.className = `nav-item ${State.activeFilter === cat.name ? 'active' : ''}`;
         catDiv.innerHTML = `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${cat.color}; margin-right:12px;"></span> ${cat.name}`;
-        catDiv.onclick = () => { State.activeFilter = cat.name; renderApp(); };
+        catDiv.onclick = () => { State.activeFilter = cat.name; window.renderApp(); };
         filtersMenu.appendChild(catDiv);
     });
 }
 
-// ============================================================================
-// RENDERER: TURNI / REPARTI (Orizzontale)
-// ============================================================================
+/**
+ * ============================================================================
+ * RENDERER: TURNI (Menu Orizzontale)
+ * ============================================================================
+ */
 function renderFolders() {
     const foldersMenu = document.getElementById('folders-menu');
+    if (!foldersMenu) return;
+    
     const isAdmin = State.activeProfile === 'admin';
     foldersMenu.innerHTML = '';
 
@@ -105,7 +122,7 @@ function renderFolders() {
         btn.onclick = () => {
             State.activeFolder = folderId;
             State.activeFilter = null;
-            renderApp();
+            window.renderApp();
         };
 
         if (isAdmin) {
@@ -119,22 +136,32 @@ function renderFolders() {
     if (isAdmin) {
         const addFolderBtn = document.createElement('button');
         addFolderBtn.className = 'folder-tab add';
+        addFolderBtn.style.borderStyle = 'dashed';
         addFolderBtn.innerHTML = `<i class="fa-solid fa-plus"></i> Nuovo Turno`;
         addFolderBtn.onclick = () => window.openFolderModal();
         foldersMenu.appendChild(addFolderBtn);
     }
 }
 
-// ============================================================================
-// RENDERER: MATRICE CENTRALE (Celle e Prodotti)
-// ============================================================================
+/**
+ * ============================================================================
+ * RENDERER: MATRICE CENTRALE (Celle e Prodotti)
+ * ============================================================================
+ */
 function renderMainContent() {
     const content = document.getElementById('main-content');
     const headerTitle = document.getElementById('header-title');
+    if (!content || !headerTitle) return;
+    
     const isAdmin = State.activeProfile === 'admin';
     content.innerHTML = '';
 
-    if (!State.activeSede || !State.activeFolder) {
+    if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) {
+        headerTitle.innerText = "SISTEMA VERGINE - CREA UNA SEDE";
+        return;
+    }
+
+    if (!State.activeFolder || !State.appStructure.sedi[State.activeSede].folders[State.activeFolder]) {
         headerTitle.innerText = "NESSUN TURNO ATTIVO";
         return;
     }
@@ -148,28 +175,24 @@ function renderMainContent() {
     Object.keys(sections).forEach(sectionId => {
         const section = sections[sectionId];
         
-        // Filtro logico per Categoria
         if (State.activeFilter && section.name !== State.activeFilter) return;
 
-        // Container Sezione
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'section-container';
         sectionDiv.style.borderTop = `4px solid ${section.color}`;
         
-        // Header Sezione
         const sectionHeader = document.createElement('div');
         sectionHeader.className = 'section-header';
         sectionHeader.innerHTML = `
-            <h3 style="color: ${section.color}; text-transform: uppercase; letter-spacing: 1px;">${section.name}</h3>
-            ${isAdmin ? `<div class="section-actions">
-                <i class="fa-solid fa-copy action-icon" onclick="window.copySection('${sectionId}')"></i>
-                <i class="fa-solid fa-pen action-icon" onclick="window.editSection('${sectionId}')"></i>
+            <h3 style="color: ${section.color}; text-transform: uppercase; letter-spacing: 1px; margin:0;">${section.name}</h3>
+            ${isAdmin ? `<div style="display:flex; gap:16px;">
+                <i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection('${sectionId}')"></i>
+                <i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection('${sectionId}')"></i>
             </div>` : ''}
         `;
         sectionDiv.appendChild(sectionHeader);
 
-        // Lista Prodotti
-        section.items.forEach((item, index) => {
+        section.items.forEach((item) => {
             const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
             const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
             
@@ -180,29 +203,26 @@ function renderMainContent() {
                 <div class="item-main">
                     <div class="item-name-group">
                         <span class="item-name">${item.name}</span>
-                        ${item.isSystemic ? `<span class="badge" style="background:${section.color}20; color:${section.color};"><i class="fa-solid fa-link"></i> NEXUS</span>` : ''}
+                        ${item.isSystemic ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:${section.color}20; color:${section.color};"><i class="fa-solid fa-link"></i> NEXUS</span>` : ''}
                     </div>
                     
                     <div class="item-controls">
                         <div class="input-group-inline">
-                            <input type="number" class="qty-input" value="${itemState.n_op}" placeholder="Qt." data-key="${stateKey}" onchange="window.updateItemData('${stateKey}', 'n_op', this.value)">
+                            <input type="number" class="qty-input" value="${itemState.n_op}" placeholder="Qt." onchange="window.updateItemData('${stateKey}', 'n_op', this.value)">
                             <span class="unit-label">${item.unit || 'pz'}</span>
                         </div>
                         
-                        <div class="checkbox-wrapper" onclick="window.toggleDone('${stateKey}')">
-                            <div class="custom-checkbox ${itemState.done ? 'checked' : ''}">
-                                ${itemState.done ? '<i class="fa-solid fa-check"></i>' : ''}
-                            </div>
+                        <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">
+                            ${itemState.done ? '<i class="fa-solid fa-check"></i>' : ''}
                         </div>
                     </div>
                 </div>
                 
-                <div class="item-sub">
-                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa visibile..." data-key="${stateKey}" onchange="window.updateItemData('${stateKey}', 'note', this.value)">
+                <div class="item-sub" style="margin-top: 8px;">
+                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa..." onchange="window.updateItemData('${stateKey}', 'note', this.value)">
                 </div>
             `;
 
-            // Long press per modificare/eliminare prodotto (Solo Admin)
             if (isAdmin) {
                 let pressTimer;
                 itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editItem(sectionId, item.id), 800); };
@@ -212,12 +232,13 @@ function renderMainContent() {
             sectionDiv.appendChild(itemDiv);
         });
 
-        // Bottone Aggiungi Prodotto
         if (isAdmin) {
             const addItemBtn = document.createElement('button');
-            addItemBtn.className = 'btn-action dashed';
-            addItemBtn.style.marginTop = '16px';
-            addItemBtn.innerHTML = `<i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO IN ${section.name}`;
+            addItemBtn.className = 'btn-action';
+            addItemBtn.style.margin = '16px';
+            addItemBtn.style.width = 'calc(100% - 32px)';
+            addItemBtn.style.border = '1px dashed var(--border)';
+            addItemBtn.innerHTML = `<i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO`;
             addItemBtn.onclick = () => window.openItemModal(sectionId);
             sectionDiv.appendChild(addItemBtn);
         }
@@ -225,7 +246,6 @@ function renderMainContent() {
         content.appendChild(sectionDiv);
     });
 
-    // Bottone Aggiungi Sezione (Cella Logica)
     if (isAdmin && !State.activeFilter) {
         const addSectionBtn = document.createElement('button');
         addSectionBtn.className = 'btn-action';
@@ -238,9 +258,6 @@ function renderMainContent() {
     }
 }
 
-// ============================================================================
-// UTILITY
-// ============================================================================
 function getUniqueCategories(sedeId) {
     if (!sedeId || !State.appStructure.sedi[sedeId]) return [];
     const categoriesMap = new Map();
