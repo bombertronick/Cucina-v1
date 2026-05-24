@@ -79,7 +79,7 @@ window.renderNexusHub = () => {
 
 /**
  * ============================================================================
- * MOTORE DI EDITING E SALVATAGGIO (CRUD)
+ * MOTORE DI EDITING E SALVATAGGIO MATRICE LOGISTICA
  * ============================================================================
  */
 window.saveSedeLogic = async () => {
@@ -148,7 +148,7 @@ window.editSection = (sectionId) => {
     document.getElementById('input-section-color').value = sec.color;
 };
 
-// APERTURA MODALI
+// APERTURA MODALI STRUTTURALI
 window.openSedeModal = () => {
     document.getElementById('modal-layer').style.display = 'flex';
     document.getElementById('modal-sede').style.display = 'flex';
@@ -268,4 +268,137 @@ window.deleteItemLogic = async () => {
     section.items = section.items.filter(i => i.id !== window._editContext.itemId);
     
     window.closeModals(); window.renderApp(); await saveState(); window.showToast("Prodotto eliminato", "info"); window.haptic(50);
+};
+
+/**
+ * ============================================================================
+ * INIEZIONE E GESTIONE MODALI OPERATORI
+ * ============================================================================
+ */
+function injectOperatorModals() {
+    if (document.getElementById('modal-operator-list')) return;
+    const modalHTML = `
+        <div id="modal-operator-list" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+            <div class="modal-box">
+                <h2 style="margin-bottom: 24px; color: var(--accent);"><i class="fa-solid fa-users"></i> DIPENDENTI SEDE</h2>
+                <div id="operator-list-container" style="margin-bottom: 24px; max-height: 40vh; overflow-y: auto;"></div>
+                <button class="btn-action" style="margin-bottom: 16px; border: 1px dashed var(--border);" onclick="window.openOperatorDetailModal()"><i class="fa-solid fa-plus"></i> AGGIUNGI OPERATORE</button>
+                <button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO</button>
+            </div>
+        </div>
+
+        <div id="modal-operator-detail" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+            <div class="modal-box">
+                <h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA OPERATORE</h2>
+                <div class="input-group">
+                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Visualizzato</label>
+                    <input type="text" id="input-op-name" placeholder="Es. Mario Rossi">
+                </div>
+                <div class="input-group">
+                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">PIN di Accesso (Solo Numeri)</label>
+                    <input type="number" pattern="[0-9]*" inputmode="numeric" id="input-op-pin" placeholder="Es. 1234">
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: auto;">
+                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
+                    <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-op" onclick="window.deleteOperatorLogic()"><i class="fa-solid fa-trash"></i> RIMUOVI</button>
+                    <button class="btn-action solid" onclick="window.saveOperatorLogic()">SALVA</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modal-layer').insertAdjacentHTML('beforeend', modalHTML);
+}
+
+window.openOperatorListModal = () => {
+    if (!State.activeSede) return window.showToast("Nessuna sede attiva.", "error");
+    injectOperatorModals();
+    
+    const sede = State.appStructure.sedi[State.activeSede];
+    if (!sede.roles) sede.roles = []; // Assicura che l'array esista
+    
+    const container = document.getElementById('operator-list-container');
+    container.innerHTML = '';
+    
+    if (sede.roles.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">Nessun operatore configurato.</div>`;
+    } else {
+        sede.roles.forEach(op => {
+            const div = document.createElement('div');
+            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.2); border-radius:8px; margin-bottom:8px;";
+            div.innerHTML = `
+                <div>
+                    <div style="font-weight:700;">${op.name}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">PIN: ${op.pin}</div>
+                </div>
+                <i class="fa-solid fa-pen" style="cursor:pointer; color:var(--accent); padding:8px;" onclick="window.openOperatorDetailModal('${op.id}')"></i>
+            `;
+            container.appendChild(div);
+        });
+    }
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-operator-list').style.display = 'flex';
+};
+
+window.openOperatorDetailModal = (opId = null) => {
+    document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    
+    window._editContext = opId ? { type: 'operator', id: opId, isNew: false } : { type: 'operator', isNew: true };
+    document.getElementById('op-modal-title').innerText = opId ? 'MODIFICA OPERATORE' : 'NUOVO OPERATORE';
+    
+    const btnDelete = document.getElementById('btn-delete-op');
+    const inputName = document.getElementById('input-op-name');
+    const inputPin = document.getElementById('input-op-pin');
+    
+    if (opId) {
+        const op = State.appStructure.sedi[State.activeSede].roles.find(r => r.id === opId);
+        inputName.value = op.name;
+        inputPin.value = op.pin;
+        btnDelete.style.display = 'block';
+    } else {
+        inputName.value = '';
+        inputPin.value = '';
+        btnDelete.style.display = 'none';
+    }
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-operator-detail').style.display = 'flex';
+};
+
+window.saveOperatorLogic = async () => {
+    const name = document.getElementById('input-op-name').value.trim();
+    const pin = document.getElementById('input-op-pin').value.trim();
+    
+    if (!name || !pin) return window.showToast("Compila tutti i campi.", "error");
+    
+    const sede = State.appStructure.sedi[State.activeSede];
+    
+    // Verifica che il PIN non sia usato dal ROOT (Per sicurezza) o da altri operatori
+    if (window.Cerbero && window.Cerbero.verifyRootSignature(pin)) {
+        return window.showToast("Questo PIN è riservato all'Amministratore.", "error");
+    }
+    if (window._editContext.isNew && sede.roles.some(r => r.pin === pin)) {
+         return window.showToast("PIN già in uso da un altro operatore.", "error");
+    }
+
+    if (window._editContext.isNew) {
+        sede.roles.push({ id: 'op_' + Date.now(), name: name, pin: pin });
+    } else {
+        const idx = sede.roles.findIndex(r => r.id === window._editContext.id);
+        if (idx !== -1) {
+            sede.roles[idx].name = name;
+            sede.roles[idx].pin = pin;
+        }
+    }
+    
+    window.closeModals(); await saveState(); window.showToast("Operatore salvato.", "success");
+};
+
+window.deleteOperatorLogic = async () => {
+    if (!confirm("Vuoi davvero revocare l'accesso a questo operatore?")) return;
+    
+    const sede = State.appStructure.sedi[State.activeSede];
+    sede.roles = sede.roles.filter(r => r.id !== window._editContext.id);
+    
+    window.closeModals(); await saveState(); window.showToast("Operatore rimosso.", "info");
 };
