@@ -13,7 +13,6 @@ window.renderNexusHub = () => {
     
     let globalDeficits = [];
     
-    // Scansione profonda della matrice alla ricerca di spunte o quantità alterate
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         Object.keys(sede.folders).forEach(folderId => {
@@ -44,9 +43,7 @@ window.renderNexusHub = () => {
     });
 
     if (globalDeficits.length === 0) {
-        content.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted);">
-            <i class="fa-solid fa-check-circle" style="font-size: 3rem; margin-bottom:16px; opacity:0.2;"></i><br>
-            Matrice Logistica Stabile.<br>Nessun deficit rilevato.</div>`;
+        content.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-check-circle" style="font-size: 3rem; margin-bottom:16px; opacity:0.2;"></i><br>Matrice Logistica Stabile.<br>Nessun deficit rilevato.</div>';
         return;
     }
 
@@ -57,28 +54,33 @@ window.renderNexusHub = () => {
     }, {});
     
     Object.keys(grouped).forEach(sedeName => {
-        html += `<div style="margin-bottom: 24px; border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: rgba(0,0,0,0.2);">
-                    <h3 style="color: var(--accent); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                        <i class="fa-solid fa-shield"></i> ${sedeName}
-                    </h3>`;
+        html += '<div style="margin-bottom: 24px; border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: rgba(0,0,0,0.2);">';
+        html += '<h3 style="color: var(--accent); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;"><i class="fa-solid fa-shield"></i> ' + sedeName + '</h3>';
         
         grouped[sedeName].forEach(def => {
-            // Se esiste un fornitore, disegna il badge per i riordini
-            const supplierHtml = def.supplier ? `<div style="font-size: 0.85rem; color: var(--accent); margin-top: 4px; font-weight: 700;"><i class="fa-solid fa-truck"></i> ${def.supplier} ${def.sku ? `[SKU: ${def.sku}]` : ''}</div>` : '';
+            let supplierHtml = '';
+            if (def.supplier) {
+                let skuText = '';
+                if (def.sku) skuText = ' [SKU: ' + def.sku + ']';
+                supplierHtml = '<div style="font-size: 0.85rem; color: var(--accent); margin-top: 4px; font-weight: 700;"><i class="fa-solid fa-truck"></i> ' + def.supplier + skuText + '</div>';
+            }
             
-            html += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
-                        <div>
-                            <div style="font-weight: 700; font-size: 1.1rem;">${def.itemName}</div>
-                            <div style="font-size: 0.8rem; color: ${def.sectionColor}; font-weight: 800;">${def.sectionName} (${def.folderName})</div>
-                            ${supplierHtml}
-                            ${def.note ? `<div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;"><i class="fa-solid fa-comment"></i> ${def.note}</div>` : ''}
-                        </div>
-                        <div style="background: var(--accent); color: var(--bg); font-weight: 800; font-size: 1.2rem; padding: 6px 16px; border-radius: 8px;">
-                            ${def.qty} <span style="font-size: 0.8rem;">${def.unit}</span>
-                        </div>
-                     </div>`;
+            let noteHtml = '';
+            if (def.note) {
+                noteHtml = '<div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;"><i class="fa-solid fa-comment"></i> ' + def.note + '</div>';
+            }
+
+            html += '<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">';
+            html += '<div>';
+            html += '<div style="font-weight: 700; font-size: 1.1rem;">' + def.itemName + '</div>';
+            html += '<div style="font-size: 0.8rem; color: ' + def.sectionColor + '; font-weight: 800;">' + def.sectionName + ' (' + def.folderName + ')</div>';
+            html += supplierHtml;
+            html += noteHtml;
+            html += '</div>';
+            html += '<div style="background: var(--accent); color: var(--bg); font-weight: 800; font-size: 1.2rem; padding: 6px 16px; border-radius: 8px;">' + def.qty + ' <span style="font-size: 0.8rem;">' + def.unit + '</span></div>';
+            html += '</div>';
         });
-        html += `</div>`;
+        html += '</div>';
     });
     
     content.innerHTML = html;
@@ -174,13 +176,7 @@ window.openSectionModal = () => {
     document.getElementById('input-section-name').value = '';
     
     const select = document.getElementById('input-section-color');
-    select.innerHTML = `
-        <option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option>
-        <option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option>
-        <option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option>
-        <option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option>
-        <option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option>
-    `;
+    select.innerHTML = '<option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option><option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option><option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option><option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option><option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option>';
 };
 
 /**
@@ -190,46 +186,7 @@ window.openSectionModal = () => {
  */
 function injectItemModal() {
     if (document.getElementById('modal-item')) return;
-    const modalHTML = `
-        <div id="modal-item" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 id="item-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA PRODOTTO</h2>
-                
-                <div class="input-group" style="margin-bottom: 12px;">
-                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Articolo</label>
-                    <input type="text" id="input-item-name" placeholder="Es. Pomodori Pelati...">
-                </div>
-                
-                <div class="input-group" style="margin-bottom: 24px;">
-                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Unità di Misura</label>
-                    <input type="text" id="input-item-unit" placeholder="Unità (pz, kg, box...)" value="pz">
-                </div>
-
-                <div style="border-top: 1px dashed var(--border); padding-top: 16px; margin-bottom: 24px;">
-                    <div style="font-size: 0.8rem; font-weight: 800; color: var(--accent); margin-bottom: 12px; letter-spacing:1px;">REFERENZE LOGISTICHE (OPZIONALE)</div>
-                    
-                    <div class="input-group" style="margin-bottom: 12px;">
-                        <input type="text" id="input-item-supplier" placeholder="Nome Fornitore (Es. Metro, Marr...)">
-                    </div>
-                    
-                    <div class="input-group">
-                        <input type="text" id="input-item-sku" placeholder="Codice Articolo / SKU">
-                    </div>
-                </div>
-
-                <label style="display:flex; align-items:center; gap:12px; margin-bottom: 24px; cursor:pointer;">
-                    <input type="checkbox" id="input-item-systemic" style="width:24px; height:24px;">
-                    <span style="font-weight:700;">Forza segnalazione in HUB NEXUS</span>
-                </label>
-                
-                <div style="display: flex; gap: 16px; margin-top: auto;">
-                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
-                    <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-item" onclick="window.deleteItemLogic()"><i class="fa-solid fa-trash"></i></button>
-                    <button class="btn-action solid" onclick="window.saveItemLogic()">SALVA</button>
-                </div>
-            </div>
-        </div>
-    `;
+    const modalHTML = '<div id="modal-item" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="item-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA PRODOTTO</h2><div class="input-group" style="margin-bottom: 12px;"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Articolo</label><input type="text" id="input-item-name" placeholder="Es. Pomodori Pelati..."></div><div class="input-group" style="margin-bottom: 24px;"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Unità di Misura</label><input type="text" id="input-item-unit" placeholder="Unità (pz, kg, box...)" value="pz"></div><div style="border-top: 1px dashed var(--border); padding-top: 16px; margin-bottom: 24px;"><div style="font-size: 0.8rem; font-weight: 800; color: var(--accent); margin-bottom: 12px; letter-spacing:1px;">REFERENZE LOGISTICHE (OPZIONALE)</div><div class="input-group" style="margin-bottom: 12px;"><input type="text" id="input-item-supplier" placeholder="Nome Fornitore (Es. Metro, Marr...)"></div><div class="input-group"><input type="text" id="input-item-sku" placeholder="Codice Articolo / SKU"></div></div><label style="display:flex; align-items:center; gap:12px; margin-bottom: 24px; cursor:pointer;"><input type="checkbox" id="input-item-systemic" style="width:24px; height:24px;"><span style="font-weight:700;">Forza segnalazione in HUB NEXUS</span></label><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-item" onclick="window.deleteItemLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveItemLogic()">SALVA</button></div></div></div>';
     document.getElementById('modal-layer').insertAdjacentHTML('beforeend', modalHTML);
 }
 
@@ -317,35 +274,7 @@ window.deleteItemLogic = async () => {
  */
 function injectOperatorModals() {
     if (document.getElementById('modal-operator-list')) return;
-    const modalHTML = `
-        <div id="modal-operator-list" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 style="margin-bottom: 24px; color: var(--accent);"><i class="fa-solid fa-users"></i> DIPENDENTI SEDE</h2>
-                <div id="operator-list-container" style="margin-bottom: 24px; max-height: 40vh; overflow-y: auto;"></div>
-                <button class="btn-action" style="margin-bottom: 16px; border: 1px dashed var(--border);" onclick="window.openOperatorDetailModal()"><i class="fa-solid fa-plus"></i> AGGIUNGI OPERATORE</button>
-                <button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO</button>
-            </div>
-        </div>
-
-        <div id="modal-operator-detail" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-            <div class="modal-box">
-                <h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA OPERATORE</h2>
-                <div class="input-group">
-                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Visualizzato</label>
-                    <input type="text" id="input-op-name" placeholder="Es. Mario Rossi">
-                </div>
-                <div class="input-group">
-                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">PIN di Accesso (Solo Numeri)</label>
-                    <input type="number" pattern="[0-9]*" inputmode="numeric" id="input-op-pin" placeholder="Es. 1234">
-                </div>
-                <div style="display: flex; gap: 16px; margin-top: auto;">
-                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
-                    <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-op" onclick="window.deleteOperatorLogic()"><i class="fa-solid fa-trash"></i> RIMUOVI</button>
-                    <button class="btn-action solid" onclick="window.saveOperatorLogic()">SALVA</button>
-                </div>
-            </div>
-        </div>
-    `;
+    const modalHTML = '<div id="modal-operator-list" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 style="margin-bottom: 24px; color: var(--accent);"><i class="fa-solid fa-users"></i> DIPENDENTI SEDE</h2><div id="operator-list-container" style="margin-bottom: 24px; max-height: 40vh; overflow-y: auto;"></div><button class="btn-action" style="margin-bottom: 16px; border: 1px dashed var(--border);" onclick="window.openOperatorDetailModal()"><i class="fa-solid fa-plus"></i> AGGIUNGI OPERATORE</button><button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO</button></div></div><div id="modal-operator-detail" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA OPERATORE</h2><div class="input-group"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Visualizzato</label><input type="text" id="input-op-name" placeholder="Es. Mario Rossi"></div><div class="input-group"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">PIN di Accesso (Solo Numeri)</label><input type="number" pattern="[0-9]*" inputmode="numeric" id="input-op-pin" placeholder="Es. 1234"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-op" onclick="window.deleteOperatorLogic()"><i class="fa-solid fa-trash"></i> RIMUOVI</button><button class="btn-action solid" onclick="window.saveOperatorLogic()">SALVA</button></div></div></div>';
     document.getElementById('modal-layer').insertAdjacentHTML('beforeend', modalHTML);
 }
 
@@ -360,18 +289,12 @@ window.openOperatorListModal = () => {
     container.innerHTML = '';
     
     if (sede.roles.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">Nessun operatore configurato.</div>`;
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Nessun operatore configurato.</div>';
     } else {
         sede.roles.forEach(op => {
             const div = document.createElement('div');
             div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.2); border-radius:8px; margin-bottom:8px;";
-            div.innerHTML = `
-                <div>
-                    <div style="font-weight:700;">${op.name}</div>
-                    <div style="font-size:0.8rem; color:var(--text-muted);">PIN: ${op.pin}</div>
-                </div>
-                <i class="fa-solid fa-pen" style="cursor:pointer; color:var(--accent); padding:8px;" onclick="window.openOperatorDetailModal('${op.id}')"></i>
-            `;
+            div.innerHTML = '<div><div style="font-weight:700;">' + op.name + '</div><div style="font-size:0.8rem; color:var(--text-muted);">PIN: ' + op.pin + '</div></div><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--accent); padding:8px;" onclick="window.openOperatorDetailModal(\'' + op.id + '\')"></i>';
             container.appendChild(div);
         });
     }
