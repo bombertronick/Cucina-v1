@@ -8,7 +8,6 @@ import { showToast, switchSpaView, haptic } from './ui/events.js';
 import './ui/renderer.js';
 import './ui/nexus.js';
 
-// Esposizione per l'interfaccia
 window.syncPullCloud = syncPullCloud;
 window.syncPushCloud = syncPushCloud;
 window.CloudVault = CloudVault;
@@ -19,11 +18,40 @@ async function bootSystem() {
     try {
         console.info("[Bootloader] Inizializzazione Core Lazzaro...");
         await initDatabase();
+        
+        // Popola il menu a tendina degli operatori
+        populateLoginProfiles();
+        
         checkAuthentication();
     } catch (e) {
         console.error("[Fatal Error]", e);
         showToast("Errore critico avvio database.", "error");
     }
+}
+
+function populateLoginProfiles() {
+    const select = document.getElementById('login-profile');
+    const container = document.getElementById('login-profile-container');
+    if (!select || !container) return;
+
+    // Inizializza con ROOT
+    select.innerHTML = '<option value="admin">ROOT (AMMINISTRATORE)</option>';
+
+    // Estrae tutti gli operatori dalle Sedi e li aggiunge
+    Object.keys(State.appStructure.sedi).forEach(sedeId => {
+        const sede = State.appStructure.sedi[sedeId];
+        if (sede.roles && sede.roles.length > 0) {
+            sede.roles.forEach(op => {
+                const opt = document.createElement('option');
+                opt.value = op.id;
+                opt.dataset.sede = sedeId; // Memorizza a quale sede appartiene l'operatore
+                opt.innerText = op.name.toUpperCase() + ' (' + sede.name + ')';
+                select.appendChild(opt);
+            });
+        }
+    });
+
+    container.style.display = 'block';
 }
 
 function checkAuthentication() { 
@@ -52,46 +80,53 @@ function routeUser() {
 }
 
 window.performLogin = async () => {
+    const select = document.getElementById('login-profile');
     const pinInput = document.getElementById('login-password');
-    if (!pinInput) return;
+    if (!pinInput || !select) return;
+    
+    const profileId = select.value;
     const pin = pinInput.value.trim();
-    if (!pin) return;
     
-    if (Cerbero.isSystemVirgin()) {
-        console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
-        Cerbero.setupRootSignature(pin || '0000');
-        finalizeLogin('admin');
+    if (!pin) {
+        showToast("Inserisci il PIN", "error");
         return;
-    } else if (Cerbero.verifyRootSignature(pin)) {
-        finalizeLogin('admin');
-        return;
-    } 
-
-    let foundOperator = null;
-    let foundSedeId = null;
-    
-    Object.keys(State.appStructure.sedi).forEach(sedeId => {
-        const sede = State.appStructure.sedi[sedeId];
-        if (sede.roles) {
-            const op = sede.roles.find(r => r.pin === pin);
-            if (op) {
-                foundOperator = op;
-                foundSedeId = sedeId;
-            }
-        }
-    });
-
-    if (foundOperator) {
-        State.activeSede = foundSedeId;
-        State.activeFolder = Object.keys(State.appStructure.sedi[foundSedeId].folders)[0] || null;
-        finalizeLogin(foundOperator.id);
-    } else {
-        showToast("Firma Respinta. PIN Errato o inesistente.", "error");
-        haptic(50);
     }
     
+    // Logica di accesso ROOT
+    if (profileId === 'admin') {
+        if (Cerbero.isSystemVirgin()) {
+            console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
+            Cerbero.setupRootSignature(pin || '0000');
+            finalizeLogin('admin');
+            return;
+        } else if (Cerbero.verifyRootSignature(pin)) {
+            finalizeLogin('admin');
+            return;
+        } else {
+            showToast("Firma ROOT Respinta. PIN errato.", "error");
+            haptic(50);
+            return;
+        }
+    } 
+
+    // Logica di accesso OPERATORE
+    const selectedOpt = select.options[select.selectedIndex];
+    const sedeId = selectedOpt.dataset.sede;
+    const sede = State.appStructure.sedi[sedeId];
+
+    if (sede && sede.roles) {
+        const op = sede.roles.find(r => r.id === profileId);
+        if (op && op.pin === pin) {
+            State.activeSede = sedeId;
+            State.activeFolder = Object.keys(sede.folders)[0] || null;
+            finalizeLogin(op.id);
+            return;
+        }
+    }
+
+    showToast("PIN Errato per questo operatore.", "error");
+    haptic(50);
     pinInput.value = ''; 
-    haptic();
 };
 
 function finalizeLogin(profileId) { 
@@ -121,5 +156,4 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Avvio esplicito forzato
 bootSystem();
