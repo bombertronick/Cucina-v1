@@ -4,7 +4,7 @@ import { saveState } from '../core/lazzaro.js';
 
 /**
  * ============================================================================
- * MOTORE NEXUS (Calcolo Deficit Centralizzato)
+ * MOTORE NEXUS (Calcolo Deficit Centralizzato & Export Ordini)
  * ============================================================================
  */
 window.renderNexusHub = () => {
@@ -13,6 +13,7 @@ window.renderNexusHub = () => {
     
     let globalDeficits = [];
     
+    // Scansione profonda della matrice alla ricerca di spunte o quantità alterate
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         Object.keys(sede.folders).forEach(folderId => {
@@ -30,6 +31,8 @@ window.renderNexusHub = () => {
                             sectionName: section.name,
                             sectionColor: section.color,
                             itemName: item.name,
+                            supplier: item.supplier || '',
+                            sku: item.sku || '',
                             qty: itemState.n_op || 'Rifornire',
                             unit: item.unit || 'pz',
                             note: itemState.note || ''
@@ -60,10 +63,14 @@ window.renderNexusHub = () => {
                     </h3>`;
         
         grouped[sedeName].forEach(def => {
+            // Se esiste un fornitore, disegna il badge per i riordini
+            const supplierHtml = def.supplier ? `<div style="font-size: 0.85rem; color: var(--accent); margin-top: 4px; font-weight: 700;"><i class="fa-solid fa-truck"></i> ${def.supplier} ${def.sku ? `[SKU: ${def.sku}]` : ''}</div>` : '';
+            
             html += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
                         <div>
                             <div style="font-weight: 700; font-size: 1.1rem;">${def.itemName}</div>
                             <div style="font-size: 0.8rem; color: ${def.sectionColor}; font-weight: 800;">${def.sectionName} (${def.folderName})</div>
+                            ${supplierHtml}
                             ${def.note ? `<div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;"><i class="fa-solid fa-comment"></i> ${def.note}</div>` : ''}
                         </div>
                         <div style="background: var(--accent); color: var(--bg); font-weight: 800; font-size: 1.2rem; padding: 6px 16px; border-radius: 8px;">
@@ -79,7 +86,7 @@ window.renderNexusHub = () => {
 
 /**
  * ============================================================================
- * MOTORE DI EDITING E SALVATAGGIO MATRICE LOGISTICA
+ * MOTORE DI EDITING E SALVATAGGIO MATRICE LOGISTICA (CRUD STRUTTURA)
  * ============================================================================
  */
 window.saveSedeLogic = async () => {
@@ -178,7 +185,7 @@ window.openSectionModal = () => {
 
 /**
  * ============================================================================
- * INIEZIONE E GESTIONE PRODOTTO
+ * INIEZIONE E GESTIONE PRODOTTO (ANAGRAFICA AVANZATA)
  * ============================================================================
  */
 function injectItemModal() {
@@ -186,17 +193,35 @@ function injectItemModal() {
     const modalHTML = `
         <div id="modal-item" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
             <div class="modal-box">
-                <h2 id="item-modal-title" style="margin-bottom: 24px; color: var(--accent);">PRODOTTO</h2>
-                <div class="input-group">
+                <h2 id="item-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA PRODOTTO</h2>
+                
+                <div class="input-group" style="margin-bottom: 12px;">
+                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Articolo</label>
                     <input type="text" id="input-item-name" placeholder="Es. Pomodori Pelati...">
                 </div>
-                <div class="input-group">
+                
+                <div class="input-group" style="margin-bottom: 24px;">
+                    <label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Unità di Misura</label>
                     <input type="text" id="input-item-unit" placeholder="Unità (pz, kg, box...)" value="pz">
                 </div>
+
+                <div style="border-top: 1px dashed var(--border); padding-top: 16px; margin-bottom: 24px;">
+                    <div style="font-size: 0.8rem; font-weight: 800; color: var(--accent); margin-bottom: 12px; letter-spacing:1px;">REFERENZE LOGISTICHE (OPZIONALE)</div>
+                    
+                    <div class="input-group" style="margin-bottom: 12px;">
+                        <input type="text" id="input-item-supplier" placeholder="Nome Fornitore (Es. Metro, Marr...)">
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="input-item-sku" placeholder="Codice Articolo / SKU">
+                    </div>
+                </div>
+
                 <label style="display:flex; align-items:center; gap:12px; margin-bottom: 24px; cursor:pointer;">
                     <input type="checkbox" id="input-item-systemic" style="width:24px; height:24px;">
-                    <span style="font-weight:700;">Segnala in HUB NEXUS</span>
+                    <span style="font-weight:700;">Forza segnalazione in HUB NEXUS</span>
                 </label>
+                
                 <div style="display: flex; gap: 16px; margin-top: auto;">
                     <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
                     <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-item" onclick="window.deleteItemLogic()"><i class="fa-solid fa-trash"></i></button>
@@ -214,6 +239,8 @@ window.openItemModal = (sectionId) => {
     document.getElementById('item-modal-title').innerText = 'NUOVO PRODOTTO';
     document.getElementById('input-item-name').value = '';
     document.getElementById('input-item-unit').value = 'pz';
+    document.getElementById('input-item-supplier').value = '';
+    document.getElementById('input-item-sku').value = '';
     document.getElementById('input-item-systemic').checked = false;
     document.getElementById('btn-delete-item').style.display = 'none';
     
@@ -231,6 +258,8 @@ window.editItem = (sectionId, itemId) => {
     
     document.getElementById('input-item-name').value = item.name;
     document.getElementById('input-item-unit').value = item.unit || 'pz';
+    document.getElementById('input-item-supplier').value = item.supplier || '';
+    document.getElementById('input-item-sku').value = item.sku || '';
     document.getElementById('input-item-systemic').checked = item.isSystemic || false;
     document.getElementById('btn-delete-item').style.display = 'block';
     
@@ -241,6 +270,8 @@ window.editItem = (sectionId, itemId) => {
 window.saveItemLogic = async () => {
     const name = document.getElementById('input-item-name').value.trim();
     const unit = document.getElementById('input-item-unit').value.trim();
+    const supplier = document.getElementById('input-item-supplier').value.trim();
+    const sku = document.getElementById('input-item-sku').value.trim();
     const isSystemic = document.getElementById('input-item-systemic').checked;
     
     if (!name) { window.showToast("Nome prodotto mancante", "error"); return; }
@@ -248,12 +279,21 @@ window.saveItemLogic = async () => {
     const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.sectionId];
     
     if (window._editContext.isNew) {
-        section.items.push({ id: 'itm_' + Date.now(), name: name, unit: unit || 'pz', isSystemic: isSystemic });
+        section.items.push({ 
+            id: 'itm_' + Date.now(), 
+            name: name, 
+            unit: unit || 'pz',
+            supplier: supplier,
+            sku: sku,
+            isSystemic: isSystemic 
+        });
     } else {
         const idx = section.items.findIndex(i => i.id === window._editContext.itemId);
         if (idx !== -1) {
             section.items[idx].name = name;
             section.items[idx].unit = unit;
+            section.items[idx].supplier = supplier;
+            section.items[idx].sku = sku;
             section.items[idx].isSystemic = isSystemic;
         }
     }
@@ -314,7 +354,7 @@ window.openOperatorListModal = () => {
     injectOperatorModals();
     
     const sede = State.appStructure.sedi[State.activeSede];
-    if (!sede.roles) sede.roles = []; // Assicura che l'array esista
+    if (!sede.roles) sede.roles = [];
     
     const container = document.getElementById('operator-list-container');
     container.innerHTML = '';
@@ -373,7 +413,6 @@ window.saveOperatorLogic = async () => {
     
     const sede = State.appStructure.sedi[State.activeSede];
     
-    // Verifica che il PIN non sia usato dal ROOT (Per sicurezza) o da altri operatori
     if (window.Cerbero && window.Cerbero.verifyRootSignature(pin)) {
         return window.showToast("Questo PIN è riservato all'Amministratore.", "error");
     }
