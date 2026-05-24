@@ -7,15 +7,24 @@ import { CloudVault } from './cloud.js';
  * PROTOCOLLO LAZZARO V15.8 (Persistenza, Cloud Integration e Fault Tolerance)
  * ============================================================================
  */
-const store = localforage.createInstance({
-    name: "ScutumERP_Absolute_V15_8",
-    storeName: "matrice_logistica"
-});
+let store = null;
+
+// Istanziazione ritardata per prevenire crash asincroni
+function getStore() {
+    if (!store) {
+        store = localforage.createInstance({
+            name: "ScutumERP_Absolute_V15_8",
+            storeName: "matrice_logistica"
+        });
+    }
+    return store;
+}
 
 export async function initDatabase() {
     try {
-        const savedStruct = await store.getItem('appStructure');
-        const savedState = await store.getItem('appState');
+        const db = getStore();
+        const savedStruct = await db.getItem('appStructure');
+        const savedState = await db.getItem('appState');
 
         if (savedStruct) {
             State.appStructure = savedStruct;
@@ -44,8 +53,9 @@ export async function initDatabase() {
 
 export async function saveState() {
     try {
-        await store.setItem('appStructure', State.appStructure);
-        await store.setItem('appState', State.appState);
+        const db = getStore();
+        await db.setItem('appStructure', State.appStructure);
+        await db.setItem('appState', State.appState);
 
         if (CloudVault.isConfigured()) {
             syncPushCloud().catch(error => {
@@ -64,8 +74,9 @@ export async function syncPullCloud() {
             State.appStructure = cloudRecord.appStructure;
             State.appState = cloudRecord.appState;
             
-            await store.setItem('appStructure', State.appStructure);
-            await store.setItem('appState', State.appState);
+            const db = getStore();
+            await db.setItem('appStructure', State.appStructure);
+            await db.setItem('appState', State.appState);
             
             console.info("[Lazzaro] Allineamento Cloud completato.");
             if (window.renderApp) window.renderApp();
@@ -101,7 +112,7 @@ async function recoverLegacyData() {
                 State.appStructure = parsedData;
                 legacyFound = true;
                 console.info(`[Lazzaro] Convertito database legacy da: ${key}`);
-                await store.setItem('appStructure', State.appStructure);
+                await getStore().setItem('appStructure', State.appStructure);
                 break;
             } catch (e) {
                 console.error(`[Lazzaro] Dati corrotti nella chiave ${key}.`);
@@ -128,7 +139,6 @@ export async function exportLocalBackup() {
         version: "15.8"
     };
     
-    // Creazione del Blob per garantire il download sicuro di file pesanti su Mobile
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     
