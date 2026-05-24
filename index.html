@@ -31,8 +31,14 @@
                 <h2 style="color: var(--accent); margin-bottom: 8px; letter-spacing: 2px;">SCUTUM ERP</h2>
                 <p id="boot-status" style="color: var(--text-muted); margin-bottom: 32px; font-weight: 700;">INIZIALIZZAZIONE MOTORE...</p>
                 
+                <div id="login-profile-container" style="display: none; margin-bottom: 16px;">
+                    <select id="login-profile" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: rgba(0,0,0,0.5); color: var(--accent); font-weight: 800; font-size: 1.1rem; text-align: center; outline: none;">
+                        <option value="admin">ROOT (AMMINISTRATORE)</option>
+                    </select>
+                </div>
+
                 <div class="input-group">
-                    <input type="number" pattern="[0-9]*" inputmode="numeric" id="login-password" placeholder="PIN" 
+                    <input type="number" pattern="[0-9]*" inputmode="numeric" id="login-password" placeholder="PIN DI ACCESSO" 
                            style="text-align: center; letter-spacing: 8px; font-size: 1.5rem; width: 100%;">
                 </div>
                 
@@ -114,20 +120,18 @@
                 const statusStr = document.getElementById('boot-status');
                 statusStr.innerText = "CARICAMENTO MODULI ES6...";
                 
-                // Forza il bypass della cache di GitHub aggiungendo il timestamp
                 await import('./js/app.js?bypass=' + new Date().getTime());
                 
-                statusStr.innerText = "MOTORE ONLINE. INSERISCI PIN.";
+                statusStr.innerText = "SELEZIONA PROFILO E INSERISCI PIN";
                 statusStr.style.color = "var(--success)";
             } catch (error) {
                 console.error(error);
-                alert("CRASH FATALE RILEVATO!\n\nMessaggio: " + error.message + "\n\nSe dice 'Failed to fetch' hai nominato male una cartella. Se dice 'SyntaxError' c'è un errore di battitura nel codice.");
+                alert("CRASH FATALE RILEVATO!\n\nMessaggio: " + error.message);
                 document.getElementById('boot-status').innerText = "CRASH LOGICO. LEGGI IL POP-UP.";
                 document.getElementById('boot-status').style.color = "var(--danger)";
             }
         }
         
-        // Disattivazione Service Worker vecchio
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function(registrations) {
                 for(let registration of registrations) { registration.unregister(); }
