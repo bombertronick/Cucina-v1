@@ -1,19 +1,16 @@
 // File: js/ui/nexus.js
 import { State } from '../core/state.js';
 import { saveState } from '../core/lazzaro.js';
-import { renderApp } from './renderer.js';
-import { showToast, switchSpaView, haptic } from './events.js';
 
 /**
  * ============================================================================
- * 1. MOTORE NEXUS LOGISTICO (Calcolo Deficit Centralizzato)
+ * MOTORE NEXUS (Calcolo Deficit Centralizzato)
  * ============================================================================
  */
-export function renderNexusHub() {
+window.renderNexusHub = () => {
     const content = document.getElementById('nexus-content');
     if (!content) return;
     
-    // Raccoglie tutti i prodotti sistemici o con scorte alterate
     let globalDeficits = [];
     
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
@@ -26,7 +23,6 @@ export function renderNexusHub() {
                     const stateKey = `${sedeId}_${folderId}_${sectionId}_${item.id}`;
                     const itemState = State.appState[stateKey];
                     
-                    // Condizione Deficit: Se è spuntato (fatto) o se ha una Qt > 0
                     if (itemState && (itemState.done || (itemState.n_op && parseFloat(itemState.n_op) > 0))) {
                         globalDeficits.push({
                             sedeName: sede.name,
@@ -45,11 +41,12 @@ export function renderNexusHub() {
     });
 
     if (globalDeficits.length === 0) {
-        content.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-check-circle" style="font-size: 3rem; margin-bottom:16px; opacity:0.2;"></i><br>Matrice Logistica Stabile.<br>Nessun deficit rilevato.</div>`;
+        content.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted);">
+            <i class="fa-solid fa-check-circle" style="font-size: 3rem; margin-bottom:16px; opacity:0.2;"></i><br>
+            Matrice Logistica Stabile.<br>Nessun deficit rilevato.</div>`;
         return;
     }
 
-    // Raggruppa i deficit per Sede Logistica
     let html = '';
     const grouped = globalDeficits.reduce((acc, curr) => {
         (acc[curr.sedeName] = acc[curr.sedeName] || []).push(curr);
@@ -78,49 +75,28 @@ export function renderNexusHub() {
     });
     
     content.innerHTML = html;
-}
-
-window.renderNexusHub = renderNexusHub;
-
+};
 
 /**
  * ============================================================================
- * 2. MOTORE DI EDITING E SALVATAGGIO (CRUD)
+ * MOTORE DI EDITING E SALVATAGGIO (CRUD)
  * ============================================================================
  */
-
-// Ascoltatore globale per i bottoni di salvataggio dei Modali
-document.addEventListener('click', async (e) => {
-    const actionTarget = e.target.closest('[data-action]');
-    if (!actionTarget) return;
-    
-    const action = actionTarget.getAttribute('data-action');
-    
-    switch(action) {
-        case 'saveSedeConfirm': await saveSedeLogic(); break;
-        case 'saveFolderConfirm': await saveFolderLogic(); break;
-        case 'saveSectionConfirm': await saveSectionLogic(); break;
-        case 'saveItemConfirm': await saveItemLogic(); break;
-        case 'deleteItemConfirm': await deleteItemLogic(); break;
-    }
-});
-
-// -- LOGICHE SEDE --
-async function saveSedeLogic() {
+window.saveSedeLogic = async () => {
     const name = document.getElementById('input-sede-name').value.trim();
-    if (!name) return showToast("Nome sede obbligatorio", "error");
+    if (!name) { window.showToast("Nome sede obbligatorio", "error"); return; }
     
     if (window._editContext && window._editContext.type === 'sede') {
         State.appStructure.sedi[window._editContext.id].name = name;
-        showToast("Sede aggiornata", "success");
+        window.showToast("Sede aggiornata", "success");
     } else {
         const newId = 'sede_' + Date.now();
         State.appStructure.sedi[newId] = { name: name, roles: [], folders: {} };
         State.activeSede = newId;
-        showToast("Nuova rete creata", "success");
+        window.showToast("Nuova rete creata", "success");
     }
-    closeModals(); renderApp(); await saveState();
-}
+    window.closeModals(); window.renderApp(); await saveState();
+};
 
 window.editSede = (sedeId) => {
     window._editContext = { type: 'sede', id: sedeId };
@@ -128,8 +104,7 @@ window.editSede = (sedeId) => {
     document.getElementById('input-sede-name').value = State.appStructure.sedi[sedeId].name;
 };
 
-// -- LOGICHE REPARTI (CARTELLE) --
-async function saveFolderLogic() {
+window.saveFolderLogic = async () => {
     const name = document.getElementById('input-folder-name').value.trim();
     if (!name || !State.activeSede) return;
     
@@ -140,8 +115,8 @@ async function saveFolderLogic() {
         State.appStructure.sedi[State.activeSede].folders[newId] = { name: name, sections: {} };
         State.activeFolder = newId;
     }
-    closeModals(); renderApp(); await saveState();
-}
+    window.closeModals(); window.renderApp(); await saveState();
+};
 
 window.editFolder = (folderId) => {
     window._editContext = { type: 'folder', id: folderId };
@@ -149,8 +124,7 @@ window.editFolder = (folderId) => {
     document.getElementById('input-folder-name').value = State.appStructure.sedi[State.activeSede].folders[folderId].name;
 };
 
-// -- LOGICHE CELLE LOGICHE (SEZIONI) --
-async function saveSectionLogic() {
+window.saveSectionLogic = async () => {
     const name = document.getElementById('input-section-name').value.trim();
     const color = document.getElementById('input-section-color').value;
     if (!name || !State.activeSede || !State.activeFolder) return;
@@ -163,8 +137,8 @@ async function saveSectionLogic() {
         const newId = 'sec_' + Date.now();
         State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[newId] = { name: name, color: color, items: [] };
     }
-    closeModals(); renderApp(); await saveState();
-}
+    window.closeModals(); window.renderApp(); await saveState();
+};
 
 window.editSection = (sectionId) => {
     window._editContext = { type: 'section', id: sectionId };
@@ -174,33 +148,59 @@ window.editSection = (sectionId) => {
     document.getElementById('input-section-color').value = sec.color;
 };
 
+// APERTURA MODALI
+window.openSedeModal = () => {
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-sede').style.display = 'flex';
+    document.getElementById('input-sede-name').value = '';
+};
+
+window.openFolderModal = () => {
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-folder').style.display = 'flex';
+    document.getElementById('input-folder-name').value = '';
+};
+
+window.openSectionModal = () => {
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-section').style.display = 'flex';
+    document.getElementById('input-section-name').value = '';
+    
+    const select = document.getElementById('input-section-color');
+    select.innerHTML = `
+        <option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option>
+        <option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option>
+        <option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option>
+        <option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option>
+        <option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option>
+    `;
+};
+
 /**
  * ============================================================================
- * 3. INIEZIONE DINAMICA DEL MODALE PRODOTTO E GESTIONE DATI
+ * INIEZIONE E GESTIONE PRODOTTO
  * ============================================================================
  */
 function injectItemModal() {
     if (document.getElementById('modal-item')) return;
     const modalHTML = `
-        <div id="modal-item" class="modal-overlay" onclick="if(event.target===this) closeModals();">
+        <div id="modal-item" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
             <div class="modal-box">
                 <h2 id="item-modal-title" style="margin-bottom: 24px; color: var(--accent);">PRODOTTO</h2>
                 <div class="input-group">
-                    <label>Nome Prodotto / Operazione</label>
                     <input type="text" id="input-item-name" placeholder="Es. Pomodori Pelati...">
                 </div>
                 <div class="input-group">
-                    <label>Unità di Misura</label>
-                    <input type="text" id="input-item-unit" placeholder="pz, kg, lt, box..." value="pz">
+                    <input type="text" id="input-item-unit" placeholder="Unità (pz, kg, box...)" value="pz">
                 </div>
                 <label style="display:flex; align-items:center; gap:12px; margin-bottom: 24px; cursor:pointer;">
                     <input type="checkbox" id="input-item-systemic" style="width:24px; height:24px;">
-                    <span style="font-weight:700;">Segnala sempre in HUB NEXUS</span>
+                    <span style="font-weight:700;">Segnala in HUB NEXUS</span>
                 </label>
                 <div style="display: flex; gap: 16px; margin-top: auto;">
-                    <button class="btn-action" onclick="closeModals();">ANNULLA</button>
-                    <button class="btn-action solid" style="background:#e74c3c; display:none;" id="btn-delete-item" data-action="deleteItemConfirm"><i class="fa-solid fa-trash"></i></button>
-                    <button class="btn-action solid" data-action="saveItemConfirm">SALVA DATI</button>
+                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
+                    <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-item" onclick="window.deleteItemLogic()"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn-action solid" onclick="window.saveItemLogic()">SALVA</button>
                 </div>
             </div>
         </div>
@@ -219,7 +219,6 @@ window.openItemModal = (sectionId) => {
     
     document.getElementById('modal-layer').style.display = 'flex';
     document.getElementById('modal-item').style.display = 'flex';
-    window.location.hash = 'modal-open';
 };
 
 window.editItem = (sectionId, itemId) => {
@@ -233,19 +232,18 @@ window.editItem = (sectionId, itemId) => {
     document.getElementById('input-item-name').value = item.name;
     document.getElementById('input-item-unit').value = item.unit || 'pz';
     document.getElementById('input-item-systemic').checked = item.isSystemic || false;
-    document.getElementById('btn-delete-item').style.display = 'flex'; // Mostra tasto elimina
+    document.getElementById('btn-delete-item').style.display = 'block';
     
     document.getElementById('modal-layer').style.display = 'flex';
     document.getElementById('modal-item').style.display = 'flex';
-    window.location.hash = 'modal-open';
 };
 
-async function saveItemLogic() {
+window.saveItemLogic = async () => {
     const name = document.getElementById('input-item-name').value.trim();
     const unit = document.getElementById('input-item-unit').value.trim();
     const isSystemic = document.getElementById('input-item-systemic').checked;
     
-    if (!name) return showToast("Nome prodotto mancante", "error");
+    if (!name) { window.showToast("Nome prodotto mancante", "error"); return; }
     
     const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.sectionId];
     
@@ -260,20 +258,14 @@ async function saveItemLogic() {
         }
     }
     
-    closeModals(); renderApp(); await saveState(); haptic(20);
-}
+    window.closeModals(); window.renderApp(); await saveState(); window.haptic(20);
+};
 
-async function deleteItemLogic() {
+window.deleteItemLogic = async () => {
     if (!confirm("Radere al suolo questo prodotto dalla matrice?")) return;
     
     const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.sectionId];
     section.items = section.items.filter(i => i.id !== window._editContext.itemId);
     
-    closeModals(); renderApp(); await saveState(); showToast("Prodotto eliminato", "info"); haptic(50);
-}
-
-function closeModals() {
-    window._editContext = null;
-    history.back(); // Sfrutta l'hash URL per chiudere i popup garantendo il funzionamento del tasto "Indietro" di Android
-}
-window.closeModals = closeModals;
+    window.closeModals(); window.renderApp(); await saveState(); window.showToast("Prodotto eliminato", "info"); window.haptic(50);
+};
