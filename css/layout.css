@@ -113,3 +113,141 @@ tr.is-fulfilled .prod-name { text-decoration: line-through; color: var(--success
     .modal-box { padding: 24px; max-height: 95dvh; border-radius: 20px 20px 0 0; margin-top: auto; }
     .modal-overlay { align-items: flex-end; padding: 0; }
 }
+/* ==========================================================================
+   RESTAURO COMPONENTI UI (Turni, Card Prodotti, Checkbox)
+   ========================================================================== */
+
+/* 1. Sistemazione dei Tab dei Turni (Menu Orizzontale) */
+#folders-menu {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 24px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Nasconde la scrollbar su Firefox */
+}
+#folders-menu::-webkit-scrollbar {
+    display: none; /* Nasconde la scrollbar su Chrome/Safari */
+}
+.folder-tab {
+    padding: 12px 24px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0; /* Impedisce che si schiaccino */
+}
+.folder-tab.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+}
+
+/* 2. Sistemazione Card Prodotto (Item Row) */
+.item-row {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    transition: opacity 0.3s;
+}
+.item-row.done {
+    opacity: 0.4; /* Sbiadisce il prodotto quando è completato */
+}
+.item-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.item-name-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.item-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text);
+}
+
+/* 3. Controlli: Quantità e Unità di Misura */
+.item-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.input-group-inline {
+    display: flex;
+    align-items: center;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.qty-input {
+    width: 50px;
+    padding: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    text-align: center;
+    font-weight: 800;
+    font-size: 1rem;
+    -webkit-appearance: none;
+}
+.qty-input:focus {
+    outline: none;
+    background: rgba(201, 164, 100, 0.1);
+}
+.unit-label {
+    padding: 10px 12px 10px 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+/* 4. Il Bottone "Fatto" (Checkbox Elegante) */
+.checkbox-wrapper {
+    cursor: pointer;
+    padding: 4px; /* Area di tocco più larga per mobile */
+}
+.custom-checkbox {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+    background: var(--bg);
+}
+.custom-checkbox.checked {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+}
+
+/* 5. Area Note */
+.note-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+.note-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
