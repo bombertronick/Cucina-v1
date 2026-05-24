@@ -1,253 +1,57 @@
-/* File: css/layout.css */
+/* SPA Layout */
+#app-root { width: 100%; height: 100vh; height: 100dvh; position: relative; }
+.spa-view { display: none; width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden; }
+.spa-view.active { display: block; }
+#app-wrapper.active { display: flex; }
 
-/* ==========================================================================
-   1. SINGLE PAGE APPLICATION (SPA) ROUTER LAYER
-   ========================================================================== */
-.spa-view { 
-    position: absolute; inset: 0; display: none; opacity: 0; pointer-events: none; z-index: 1; 
-    transition: opacity 0.3s var(--bezier), transform 0.3s var(--bezier); 
-    flex-direction: column; transform: scale(0.98); 
-}
-.spa-view.active { display: flex; opacity: 1; pointer-events: auto; z-index: 10; transform: scale(1); }
-body.modal-open { pointer-events: none; }
+/* Sidebar */
+.sidebar { width: 280px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; height: 100%; overflow-y: auto; flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
+.sidebar-logo { font-size: 1.5rem; font-weight: 800; color: var(--accent); margin-bottom: 40px; display: flex; align-items: center; gap: 12px; letter-spacing: 2px; }
+.nav-item { padding: 14px 16px; border-radius: 12px; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px; color: var(--text); font-weight: 600; transition: all 0.2s; }
+.nav-item:hover { background: var(--surface-hover); }
+.nav-item.active { background: rgba(201, 164, 100, 0.1); color: var(--accent); border: 1px solid rgba(201, 164, 100, 0.2); }
+.nav-item.add-btn { color: var(--text-muted); border: 1px dashed var(--border); justify-content: center; }
+.nav-item.nexus { background: rgba(155, 89, 182, 0.1); color: var(--nexus); border: 1px dashed var(--nexus); }
 
-/* ==========================================================================
-   2. SIDEBAR DI NAVIGAZIONE E MENU
-   ========================================================================== */
-.sidebar { 
-    width: var(--sidebar-w); height: 100%; background: var(--sidebar-bg); 
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); 
-    border-right: 2px solid var(--border); display: flex; flex-direction: column; 
-    padding: 24px; z-index: 1000; flex-shrink: 0; 
-    transition: transform 0.4s var(--bezier), left 0.4s var(--bezier); position: relative; 
-}
-.sidebar::after { 
-    content: ''; position: absolute; top: 0; right: 0; width: 6px; height: 100%; 
-    background: var(--meandro-bg); background-image: var(--meandro-pattern); opacity: 0.8; 
-}
-.sidebar-logo { font-weight: 800; font-size: 1.5rem; display: flex; align-items: center; gap: 12px; color: var(--accent); letter-spacing: -0.5px; text-transform: uppercase; margin-bottom: 32px; }
-.nav-item { padding: 16px 18px; border-radius: var(--radius-main); display: flex; align-items: center; gap: 14px; cursor: pointer; color: var(--text-muted); font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; transition: 0.2s; border: 1px solid transparent; }
-.nav-item:hover { background: var(--accent-glow); color: var(--text); } 
-.nav-item.active { background: var(--border); color: var(--accent); border-color: var(--accent-glow); }
-.nav-item.nexus { color: var(--nexus); border: 2px dashed rgba(138, 43, 226, 0.4); background: var(--nexus-glow); margin-top: 16px; font-weight: 800;}
-.nav-item.nexus:hover { background: rgba(138, 43, 226, 0.25); border-style: solid; }
+/* Main Area */
+#main-area { flex-grow: 1; padding: 24px; overflow-y: auto; height: 100%; position: relative; }
+.search-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 100px; padding: 12px 24px; display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+.search-pill input { background: transparent; border: none; color: var(--text); width: 100%; font-size: 1rem; outline: none; font-weight: 600; }
 
-/* ==========================================================================
-   3. SPAZIO DI LAVORO (MAIN) E IDIOT-PROOF UI
-   ========================================================================== */
-main { flex: 1; height: 100%; display: flex; flex-direction: column; overflow-y: auto; padding: 24px; padding-top: calc(24px + var(--safe-top)); padding-bottom: calc(120px + var(--safe-bottom)); scroll-behavior: smooth; }
+/* Turni (Folders) */
+#folders-menu { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 24px; scrollbar-width: none; }
+#folders-menu::-webkit-scrollbar { display: none; }
+.folder-tab { padding: 12px 24px; border-radius: 8px; background: transparent; color: var(--text-muted); border: 1px solid var(--border); white-space: nowrap; font-weight: 700; font-size: 0.9rem; cursor: pointer; flex-shrink: 0; }
+.folder-tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 
-.search-pill { width: 100%; max-width: 800px; margin: 0 auto 32px; position: relative; }
-.search-pill input { width: 100%; padding: 20px 24px 20px 60px; border-radius: 100px; border: 2px solid var(--border); background: var(--card); color: var(--text); font-size: 1.1rem; font-weight: 700; transition: 0.3s var(--bezier); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
-.search-pill input:focus { border-color: var(--accent); background: var(--bg); box-shadow: 0 8px 30px var(--accent-glow); } 
-.search-pill i { position: absolute; left: 26px; top: 50%; transform: translateY(-50%); color: var(--accent); font-size: 1.3rem; }
+/* Sezioni & Prodotti */
+.section-container { margin-bottom: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.section-header { padding: 16px 24px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.item-row { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+.item-row.done { opacity: 0.4; }
+.item-main { display: flex; justify-content: space-between; align-items: center; }
+.item-name { font-weight: 700; font-size: 1.1rem; }
+.item-controls { display: flex; align-items: center; gap: 16px; }
+.input-group-inline { display: flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.qty-input { width: 50px; padding: 10px; background: transparent; border: none; color: var(--text); text-align: center; font-weight: 800; font-size: 1rem; }
+.unit-label { padding: 10px 12px 10px 0; color: var(--text-muted); font-size: 0.8rem; font-weight: 800; }
+.custom-checkbox { width: 32px; height: 32px; border-radius: 8px; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; color: transparent; background: var(--bg); cursor: pointer; }
+.custom-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.note-input { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.9rem; }
 
-/* Struttura Carte e Matrice */
-.card { background: var(--card); border-radius: var(--radius-main); border: 1px solid var(--border); margin-bottom: 32px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
-.card-header { font-weight: 800; font-size: 1.25rem; padding: 20px 24px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; position: relative; background: var(--bg); border-bottom: 2px solid var(--border); text-transform: uppercase; letter-spacing: 1px; }
-.card-header::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 100%; height: 2px; background: var(--meandro-bg); background-image: var(--meandro-pattern); }
-.card-progress-bg { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--border); } 
-.card-progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.4s var(--bezier); }
+/* Modali & UI */
+#modal-layer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; flex-direction: column; }
+.modal-overlay { display: none; position: absolute; top:0; left:0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); justify-content: center; align-items: center; padding: 24px; }
+.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 100%; max-width: 400px; display: flex; flex-direction: column; max-height: 90vh; overflow-y: auto; }
+.input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.input-group input, .input-group select { padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 1rem; width: 100%; }
+.btn-action { padding: 16px; border-radius: 8px; font-weight: 800; cursor: pointer; text-align: center; border: 1px solid var(--border); background: transparent; color: var(--text); width: 100%; }
+.btn-action.solid { background: var(--accent); color: var(--bg); border: none; }
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); padding: 16px 24px; border-radius: 100px; z-index: 10000; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 12px; transition: all 0.3s; }
 
-table { width: 100%; border-collapse: collapse; } 
-td { padding: 20px 24px; border-bottom: 1px solid var(--border); vertical-align: middle; } 
-tr:last-child td { border-bottom: none; }
-
-.prod-name { font-weight: 800; font-size: 1.2rem; display: block; margin-bottom: 8px; letter-spacing: -0.3px; color: var(--text); } 
-.prod-meta { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px;}
-.role-badge { padding: 4px 10px; border-radius: 6px; color: #fff; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); } 
-.target-badge { padding: 4px 10px; border-radius: 6px; background: rgba(53, 110, 59, 0.15); border: 1px solid var(--success); color: var(--success); font-weight: 800; font-size: 0.85rem;}
-.nexus-badge { padding: 4px 10px; border-radius: 6px; background: var(--nexus-glow); border: 1px solid var(--nexus); color: var(--nexus); font-weight: 800; font-size: 0.8rem;}
-.uom-badge { padding: 4px 10px; border-radius: 6px; background: var(--accent-glow); border: 1px solid var(--accent); color: var(--accent); }
-
-/* Ergonomia Contatori (Idiot-Proof UI) */
-.qty-container { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--input-bg); border: 2px solid var(--border); padding: 8px; border-radius: 16px; transition: 0.3s; width: 100%; max-width: 280px; }
-.qty-container:focus-within { border-color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); }
-.qty-container.is-deficit { border-color: var(--warning); background: rgba(201, 164, 100, 0.05); }
-.qty-container.is-nexus-deficit { border-color: var(--nexus); background: var(--nexus-glow); }
-
-.qty-input { width: 80px; text-align: center; background: transparent; border: none; color: var(--text); font-weight: 800; font-size: 1.8rem; }
-.qty-btn { width: 56px; height: 56px; border-radius: 12px; border: none; background: var(--card); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.5rem; transition: 0.1s; } 
-.qty-btn:active { transform: scale(0.9); }
-.qty-btn.minus { color: var(--danger); }
-.qty-btn.plus { background: var(--accent-glow); color: var(--accent); border: 1px solid var(--accent); }
-
-.btn-massive-action { width: 100%; max-width: 280px; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 1.2rem; cursor: pointer; border: 2px solid var(--border); background: var(--input-bg); color: var(--text-muted); transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 12px; }
-.btn-massive-action.done { background: rgba(53, 110, 59, 0.15); border-color: var(--success); color: var(--success); }
-
-tr.is-fulfilled { opacity: 0.6; background: rgba(53, 110, 59, 0.05); transition: 0.4s; } 
-tr.is-fulfilled .prod-name { text-decoration: line-through; color: var(--success); }
-.fulfilled-stamp { background: var(--success); color: white; padding: 12px; border-radius: 12px; font-weight: 800; text-align: center; width: 100%; max-width: 280px; font-size: 1.1rem; display: flex; justify-content: center; align-items: center; gap: 8px;}
-
-.note-input { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; font-size: 1rem; background: var(--input-bg); color: var(--text); margin-top: 12px; font-weight: 600; transition: border-color 0.3s; }
-.note-input:focus { border-color: var(--accent); }
-
-/* ==========================================================================
-   4. SISTEMA MODALI, FISARMONICHE E TOAST
-   ========================================================================== */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 5000; padding: 20px; pointer-events: auto; }
-.modal-box { background: var(--card); border-radius: var(--radius-main); width: 100%; max-width: 600px; padding: 32px; max-height: 90dvh; overflow-y: auto; border: 1px solid var(--border); animation: modalIn 0.3s var(--bezier) forwards; box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
-@keyframes modalIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-
-#toast-container { position: fixed; top: env(safe-area-inset-top, 20px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 12px; z-index: 10000; pointer-events: none; width: 90%; max-width: 400px;}
-.toast { background: var(--card); color: var(--text); padding: 18px 24px; border-radius: 12px; font-size: 1rem; font-weight: 800; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 2px solid var(--border); transition: 0.3s var(--bezier); text-align: center; }
-
-.accordion-group { margin-bottom: 12px; border: 2px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg); }
-.accordion-header { padding: 20px 16px; background: var(--card); color: var(--text); font-weight: 800; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.3s; }
-.accordion-header:hover { background: var(--border); }
-.accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.4s var(--bezier); background: var(--input-bg); }
-.accordion-body.open { max-height: 500px; }
-.accordion-btn { display: block; width: 100%; padding: 18px 16px; text-align: left; background: transparent; border: none; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 700; font-size: 1.05rem; cursor: pointer; transition: 0.2s; font-family: inherit; }
-.accordion-btn:last-child { border-bottom: none; }
-.accordion-btn:hover, .accordion-btn.selected { background: var(--accent-glow); color: var(--accent); padding-left: 24px; }
-
-/* ==========================================================================
-   5. RESPONSIVE DESIGN (MEDIA QUERIES MOBILE)
-   ========================================================================== */
-@media (max-width: 768px) { 
-    .sidebar { position: fixed; left: -100%; box-shadow: 20px 0 50px rgba(0,0,0,0.8); width: 85vw; max-width: 340px;} 
-    .sidebar.open { left: 0; } 
-    td { display: block; width: 100%; border-bottom: none; padding: 20px; } 
-    tr { border-bottom: 2px solid var(--border); padding: 12px 0; display: block; } 
+/* Responsive Mobile */
+@media (max-width: 768px) {
+    .sidebar { position: fixed; transform: translateX(-100%); width: 100%; max-width: 320px; }
+    .sidebar.open { transform: translateX(0); }
     #sidebar-close { display: block !important; }
-    .modal-box { padding: 24px; max-height: 95dvh; border-radius: 20px 20px 0 0; margin-top: auto; }
-    .modal-overlay { align-items: flex-end; padding: 0; }
-}
-/* ==========================================================================
-   RESTAURO COMPONENTI UI (Turni, Card Prodotti, Checkbox)
-   ========================================================================== */
-
-/* 1. Sistemazione dei Tab dei Turni (Menu Orizzontale) */
-#folders-menu {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    padding-bottom: 8px;
-    margin-bottom: 24px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Nasconde la scrollbar su Firefox */
-}
-#folders-menu::-webkit-scrollbar {
-    display: none; /* Nasconde la scrollbar su Chrome/Safari */
-}
-.folder-tab {
-    padding: 12px 24px;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    white-space: nowrap;
-    font-weight: 700;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    flex-shrink: 0; /* Impedisce che si schiaccino */
-}
-.folder-tab.active {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
-}
-
-/* 2. Sistemazione Card Prodotto (Item Row) */
-.item-row {
-    padding: 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    transition: opacity 0.3s;
-}
-.item-row.done {
-    opacity: 0.4; /* Sbiadisce il prodotto quando è completato */
-}
-.item-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.item-name-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.item-name {
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: var(--text);
-}
-
-/* 3. Controlli: Quantità e Unità di Misura */
-.item-controls {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-.input-group-inline {
-    display: flex;
-    align-items: center;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-}
-.qty-input {
-    width: 50px;
-    padding: 10px;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    text-align: center;
-    font-weight: 800;
-    font-size: 1rem;
-    -webkit-appearance: none;
-}
-.qty-input:focus {
-    outline: none;
-    background: rgba(201, 164, 100, 0.1);
-}
-.unit-label {
-    padding: 10px 12px 10px 0;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-weight: 800;
-}
-
-/* 4. Il Bottone "Fatto" (Checkbox Elegante) */
-.checkbox-wrapper {
-    cursor: pointer;
-    padding: 4px; /* Area di tocco più larga per mobile */
-}
-.custom-checkbox {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 2px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: transparent;
-    transition: all 0.2s ease;
-    background: var(--bg);
-}
-.custom-checkbox.checked {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--bg);
-}
-
-/* 5. Area Note */
-.note-input {
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 0.9rem;
-}
-.note-input:focus {
-    outline: none;
-    border-color: var(--accent);
 }
