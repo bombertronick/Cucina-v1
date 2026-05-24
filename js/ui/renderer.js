@@ -15,7 +15,17 @@ function applyRolePermissions() {
     
     const userLabel = document.getElementById('current-user-label');
     if (userLabel) {
-        userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : 'OPERATORE STANDARD';
+        if (isAdmin) {
+            userLabel.innerText = 'ROOT (AMMINISTRATORE)';
+        } else {
+            // Cerca il nome dell'operatore nel database
+            let opName = 'OPERATORE STANDARD';
+            if (State.activeSede && State.appStructure.sedi[State.activeSede].roles) {
+                const op = State.appStructure.sedi[State.activeSede].roles.find(r => r.id === State.activeProfile);
+                if (op) opName = op.name.toUpperCase();
+            }
+            userLabel.innerText = opName;
+        }
     }
 }
 
@@ -71,7 +81,7 @@ function renderSidebar() {
         sediMenu.appendChild(div);
     });
 
-    // Strumenti Amministratore (Sedi e Cloud)
+    // Strumenti Amministratore
     if (isAdmin) {
         const addSedeBtn = document.createElement('div');
         addSedeBtn.className = 'nav-item add-btn';
@@ -79,10 +89,24 @@ function renderSidebar() {
         addSedeBtn.onclick = () => window.openSedeModal();
         sediMenu.appendChild(addSedeBtn);
 
+        // INIEZIONE MODULO GESTIONE OPERATORI (Solo ROOT)
+        const operatorBtn = document.createElement('div');
+        operatorBtn.className = 'nav-item';
+        operatorBtn.style.marginTop = '16px';
+        operatorBtn.style.color = 'var(--accent)';
+        operatorBtn.style.border = '1px solid rgba(201, 164, 100, 0.3)';
+        operatorBtn.style.background = 'rgba(201, 164, 100, 0.05)';
+        operatorBtn.innerHTML = `<i class="fa-solid fa-users"></i> GESTIONE OPERATORI`;
+        operatorBtn.onclick = () => { 
+            window.openOperatorListModal(); 
+            if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
+        };
+        sediMenu.appendChild(operatorBtn);
+
         // INIEZIONE MODULO CLOUD VAULT (Solo ROOT)
         const cloudBtn = document.createElement('div');
         cloudBtn.className = 'nav-item';
-        cloudBtn.style.marginTop = '16px';
+        cloudBtn.style.marginTop = '8px';
         cloudBtn.style.color = 'var(--nexus)';
         cloudBtn.style.border = '1px solid rgba(155, 89, 182, 0.3)';
         cloudBtn.style.background = 'rgba(155, 89, 182, 0.05)';
@@ -193,7 +217,6 @@ function renderMainContent() {
     Object.keys(sections).forEach(sectionId => {
         const section = sections[sectionId];
         
-        // Esclusione logica se il filtro cromatico non coincide
         if (State.activeFilter && section.name !== State.activeFilter) return;
 
         const sectionDiv = document.createElement('div');
@@ -242,6 +265,7 @@ function renderMainContent() {
                 </div>
             `;
 
+            // Il long press di modifica funziona solo per l'amministratore
             if (isAdmin) {
                 let pressTimer;
                 itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editItem(sectionId, item.id), 800); };
