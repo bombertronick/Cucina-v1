@@ -1,0 +1,114 @@
+/* File: css/theme.css */
+
+/* ==========================================================================
+   1. VARIABILI DI STATO CROMATICO E TRANSIZIONI GLOBALI
+   ========================================================================== */
+:root {
+    /* Tema Scuro (Base Operativa Default) */
+    --bg: #0D0907; 
+    --card: #201311; 
+    --sidebar-bg: rgba(20, 10, 10, 0.98);
+    --accent: #C9A464; 
+    --accent-glow: rgba(201, 164, 100, 0.15);
+    --text: #F2E8E4; 
+    --text-muted: #8A7270; 
+    --border: #3D2624;
+    --success: #356E3B; 
+    --danger: #8C2222; 
+    --warning: #C9A464; 
+    --nexus: #8A2BE2; 
+    --nexus-glow: rgba(138, 43, 226, 0.15);
+    --input-bg: var(--bg); 
+    
+    /* Geometrie, Transizioni e Sicurezza Hardware */
+    --sidebar-w: 280px; 
+    --radius-main: 16px;            
+    --bezier: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --safe-top: env(safe-area-inset-top, 0px); 
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    
+    /* Pattern Architetturale Scutum */
+    --meandro-bg: #C9A464; 
+    --meandro-pattern: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="12" viewBox="0 0 36 12"><path d="M0,0h4v12H0zM4,4h4v4H4zM16,4h4v4h-4zM32,4h4v4h-4z" fill="rgba(201,164,100,0.15)"/></svg>');
+}
+
+[data-theme="light"] {
+    /* Tema Chiaro (Alta Visibilità Diurna) */
+    --bg: #F9F6F0; 
+    --card: #FFFFFF; 
+    --sidebar-bg: rgba(249, 246, 240, 0.98);
+    --accent: #8C2222; 
+    --accent-glow: rgba(140, 34, 34, 0.1);
+    --text: #201311; 
+    --text-muted: #7A625F; 
+    --border: #E5D5C5;
+    --success: #27632A; 
+    --danger: #B22222; 
+    --warning: #D2A850; 
+    --nexus: #673AB7; 
+    --nexus-glow: rgba(103, 58, 183, 0.15);
+    --input-bg: #F0EAE1; 
+    
+    /* Inversione Pattern */
+    --meandro-bg: #8C2222; 
+    --meandro-pattern: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="12" viewBox="0 0 36 12"><path d="M0,0h4v12H0zM4,4h4v4H4zM16,4h4v4h-4zM32,4h4v4h-4z" fill="rgba(140,34,34,0.1)"/></svg>');
+}
+
+/* ==========================================================================
+   2. NORMALIZZAZIONE HARDWARE GRAFICO
+   ========================================================================== */
+* { 
+    box-sizing: border-box; 
+    -webkit-tap-highlight-color: transparent; 
+    margin: 0; 
+    padding: 0; 
+    outline: none; 
+}
+
+body { 
+    font-family: 'Plus Jakarta Sans', sans-serif; 
+    background: var(--bg); 
+    color: var(--text); 
+    height: 100dvh; 
+    width: 100vw; 
+    overflow: hidden; 
+    display: flex; 
+    transition: background 0.4s var(--bezier), color 0.4s var(--bezier); 
+    -webkit-font-smoothing: antialiased; 
+}
+
+/* Motore Scrollbar Minimalista */
+::-webkit-scrollbar { width: 6px; height: 6px; } 
+::-webkit-scrollbar-track { background: transparent; } 
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+/* ==========================================================================
+   3. CLASSI DI UTILITÀ GLOBALI
+   ========================================================================== */
+.btn-action { 
+    border: 2px solid var(--accent); 
+    padding: 20px 24px; 
+    border-radius: 12px; 
+    font-weight: 800; 
+    cursor: pointer; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    gap: 10px; 
+    font-size: 1.1rem; 
+    transition: 0.2s; 
+    font-family: inherit; 
+    width: 100%; 
+    background: var(--accent-glow); 
+    color: var(--accent); 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+}
+.btn-action.solid { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.btn-action.nexus { background: var(--nexus); color: #fff; border-color: var(--nexus); }
+.btn-action:active { transform: scale(0.96); }
+
+.input-group { margin-bottom: 24px; width: 100%; } 
+.input-group label { display: block; font-size: 0.85rem; font-weight: 800; color: var(--text-muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;}
+.input-group input, .input-group select, .input-group textarea { width: 100%; padding: 18px 20px; border-radius: 12px; border: 2px solid var(--border); background: var(--input-bg); color: var(--text); font-family: inherit; font-size: 1.1rem; font-weight: 700; transition: 0.3s; }
+.input-group input:focus, .input-group select:focus, .input-group textarea:focus { border-color: var(--accent); background: var(--bg); }
