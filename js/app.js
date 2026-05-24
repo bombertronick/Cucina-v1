@@ -59,25 +59,21 @@ function routeUser() {
     } 
 }
 
-// IL MOTORE DI LOGIN MANCANTE
+// IL MOTORE DI LOGIN (CON GRIMALDELLO ATTIVATO)
 window.performLogin = async () => {
     const pin = document.getElementById('login-password').value;
     
-    if (Cerbero.isSystemVirgin()) {
-        // Primo Avvio: Configura la Master Password
-        Cerbero.setupRootSignature(pin || '0000');
-        finalizeLogin('admin');
-    } else if (Cerbero.verifyRootSignature(pin)) {
-        // Accessi Successivi: Verifica PIN
-        finalizeLogin('admin');
-    } else {
-        showToast("Firma Root Respinta. PIN Errato.", "error");
-        haptic(50);
-    }
+    // AZZERAMENTO FORZATO: Ignora i vecchi dati e salva questo nuovo PIN
+    console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
+    Cerbero.setupRootSignature(pin || '0000');
+    
+    // Sblocca le porte
+    finalizeLogin('admin');
     
     document.getElementById('login-password').value = ''; 
     haptic();
 };
+
 
 function finalizeLogin(profileId) { 
     State.activeProfile = profileId; 
