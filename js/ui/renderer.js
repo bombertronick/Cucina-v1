@@ -30,7 +30,7 @@ function applyRolePermissions() {
 
 /**
  * ============================================================================
- * RENDERER PRINCIPALE (Punto di Ingresso Globale)
+ * RENDERER PRINCIPALE
  * ============================================================================
  */
 window.renderApp = () => {
@@ -46,7 +46,7 @@ window.renderApp = () => {
 
 /**
  * ============================================================================
- * RENDERER: SIDEBAR (Sedi, Filtri e Strumenti ROOT)
+ * RENDERER: SIDEBAR
  * ============================================================================
  */
 function renderSidebar() {
@@ -59,8 +59,8 @@ function renderSidebar() {
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
-        div.className = `nav-item ${State.activeSede === sedeId ? 'active' : ''}`;
-        div.innerHTML = `<i class="fa-solid fa-shield"></i> ${sede.name}`;
+        div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
+        div.innerHTML = '<i class="fa-solid fa-shield"></i> ' + sede.name;
         
         div.onclick = () => {
             State.activeSede = sedeId;
@@ -81,7 +81,7 @@ function renderSidebar() {
     if (isAdmin) {
         const addSedeBtn = document.createElement('div');
         addSedeBtn.className = 'nav-item add-btn';
-        addSedeBtn.innerHTML = `<i class="fa-solid fa-plus"></i> Nuova Rete (Sede)`;
+        addSedeBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Nuova Rete (Sede)';
         addSedeBtn.onclick = () => window.openSedeModal();
         sediMenu.appendChild(addSedeBtn);
 
@@ -91,7 +91,7 @@ function renderSidebar() {
         operatorBtn.style.color = 'var(--accent)';
         operatorBtn.style.border = '1px solid rgba(201, 164, 100, 0.3)';
         operatorBtn.style.background = 'rgba(201, 164, 100, 0.05)';
-        operatorBtn.innerHTML = `<i class="fa-solid fa-users"></i> GESTIONE OPERATORI`;
+        operatorBtn.innerHTML = '<i class="fa-solid fa-users"></i> GESTIONE OPERATORI';
         operatorBtn.onclick = () => { 
             window.openOperatorListModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -104,7 +104,7 @@ function renderSidebar() {
         cloudBtn.style.color = 'var(--nexus)';
         cloudBtn.style.border = '1px solid rgba(155, 89, 182, 0.3)';
         cloudBtn.style.background = 'rgba(155, 89, 182, 0.05)';
-        cloudBtn.innerHTML = `<i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI`;
+        cloudBtn.innerHTML = '<i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI';
         cloudBtn.onclick = () => { 
             window.openCloudModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -117,16 +117,16 @@ function renderSidebar() {
     filtersMenu.innerHTML = '';
     
     const allFilter = document.createElement('div');
-    allFilter.className = `nav-item ${!State.activeFilter ? 'active' : ''}`;
-    allFilter.innerHTML = `<i class="fa-solid fa-border-all"></i> Spazio Globale`;
+    allFilter.className = 'nav-item ' + (!State.activeFilter ? 'active' : '');
+    allFilter.innerHTML = '<i class="fa-solid fa-border-all"></i> Spazio Globale';
     allFilter.onclick = () => { State.activeFilter = null; window.renderApp(); };
     filtersMenu.appendChild(allFilter);
 
     const categories = getUniqueCategories(State.activeSede);
     categories.forEach(cat => {
         const catDiv = document.createElement('div');
-        catDiv.className = `nav-item ${State.activeFilter === cat.name ? 'active' : ''}`;
-        catDiv.innerHTML = `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${cat.color}; margin-right:12px;"></span> ${cat.name}`;
+        catDiv.className = 'nav-item ' + (State.activeFilter === cat.name ? 'active' : '');
+        catDiv.innerHTML = '<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:' + cat.color + '; margin-right:12px;"></span> ' + cat.name;
         catDiv.onclick = () => { State.activeFilter = cat.name; window.renderApp(); };
         filtersMenu.appendChild(catDiv);
     });
@@ -134,7 +134,7 @@ function renderSidebar() {
 
 /**
  * ============================================================================
- * RENDERER: TURNI (Menu Orizzontale a Scorrimento)
+ * RENDERER: TURNI 
  * ============================================================================
  */
 function renderFolders() {
@@ -151,7 +151,7 @@ function renderFolders() {
     Object.keys(folders).forEach(folderId => {
         const folder = folders[folderId];
         const btn = document.createElement('button');
-        btn.className = `folder-tab ${State.activeFolder === folderId ? 'active' : ''}`;
+        btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
         btn.innerText = folder.name;
         
         btn.onclick = () => {
@@ -172,7 +172,7 @@ function renderFolders() {
         const addFolderBtn = document.createElement('button');
         addFolderBtn.className = 'folder-tab add';
         addFolderBtn.style.borderStyle = 'dashed';
-        addFolderBtn.innerHTML = `<i class="fa-solid fa-plus"></i> Nuovo Turno`;
+        addFolderBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Nuovo Turno';
         addFolderBtn.onclick = () => window.openFolderModal();
         foldersMenu.appendChild(addFolderBtn);
     }
@@ -180,7 +180,7 @@ function renderFolders() {
 
 /**
  * ============================================================================
- * RENDERER: MATRICE CENTRALE E CELLE LOGICHE
+ * RENDERER: MATRICE CENTRALE
  * ============================================================================
  */
 function renderMainContent() {
@@ -203,7 +203,7 @@ function renderMainContent() {
 
     const currentSedeName = State.appStructure.sedi[State.activeSede].name;
     const currentFolderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
-    headerTitle.innerText = `${currentSedeName} // ${currentFolderName}`;
+    headerTitle.innerText = currentSedeName + ' // ' + currentFolderName;
 
     const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
 
@@ -214,55 +214,64 @@ function renderMainContent() {
 
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'section-container';
-        sectionDiv.style.borderTop = `4px solid ${section.color}`;
+        sectionDiv.style.borderTop = '4px solid ' + section.color;
         
+        let adminActions = '';
+        if (isAdmin) {
+            adminActions = '<div style="display:flex; gap:16px;">' +
+                           '<i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection(\'' + sectionId + '\')"></i>' +
+                           '<i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection(\'' + sectionId + '\')"></i>' +
+                           '</div>';
+        }
+
         const sectionHeader = document.createElement('div');
         sectionHeader.className = 'section-header';
-        sectionHeader.innerHTML = `
-            <h3 style="color: ${section.color}; text-transform: uppercase; letter-spacing: 1px; margin:0;">${section.name}</h3>
-            ${isAdmin ? `<div style="display:flex; gap:16px;">
-                <i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection('${sectionId}')"></i>
-                <i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection('${sectionId}')"></i>
-            </div>` : ''}
-        `;
+        sectionHeader.innerHTML = '<h3 style="color: ' + section.color + '; text-transform: uppercase; letter-spacing: 1px; margin:0;">' + section.name + '</h3>' + adminActions;
         sectionDiv.appendChild(sectionHeader);
 
         section.items.forEach((item) => {
-            const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
+            const stateKey = State.activeSede + '_' + State.activeFolder + '_' + sectionId + '_' + item.id;
             const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
             
-            const systemicBadge = item.isSystemic ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:${section.color}20; color:${section.color};"><i class="fa-solid fa-link"></i> NEXUS</span>` : '';
-            const supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${item.supplier} ${item.sku ? `[${item.sku}]` : ''}</span>` : '';
+            let systemicBadge = '';
+            if (item.isSystemic) {
+                systemicBadge = '<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:' + section.color + '20; color:' + section.color + ';">' +
+                                '<i class="fa-solid fa-link"></i> NEXUS</span>';
+            }
+
+            let supplierBadge = '';
+            if (item.supplier) {
+                let skuText = '';
+                if (item.sku) skuText = '[' + item.sku + ']';
+                supplierBadge = '<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);">' +
+                                '<i class="fa-solid fa-truck"></i> ' + item.supplier + ' ' + skuText + '</span>';
+            }
             
             const itemDiv = document.createElement('div');
-            itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
+            itemDiv.className = 'item-row ' + (itemState.done ? 'done' : '');
             
-            itemDiv.innerHTML = `
-                <div class="item-main">
-                    <div class="item-name-group">
-                        <span class="item-name">${item.name}</span>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
-                            ${systemicBadge}
-                            ${supplierBadge}
-                        </div>
-                    </div>
-                    
-                    <div class="item-controls">
-                        <div class="input-group-inline">
-                            <input type="number" class="qty-input" value="${itemState.n_op}" placeholder="Qt." onchange="window.updateItemData('${stateKey}', 'n_op', this.value)">
-                            <span class="unit-label">${item.unit || 'pz'}</span>
-                        </div>
-                        
-                        <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">
-                            ${itemState.done ? '<i class="fa-solid fa-check"></i>' : ''}
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="item-sub" style="margin-top: 8px;">
-                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa..." onchange="window.updateItemData('${stateKey}', 'note', this.value)">
-                </div>
-            `;
+            let checkboxHtml = '';
+            if (itemState.done) {
+                checkboxHtml = '<i class="fa-solid fa-check"></i>';
+            }
+
+            itemDiv.innerHTML = '' +
+                '<div class="item-main">' +
+                    '<div class="item-name-group">' +
+                        '<span class="item-name">' + item.name + '</span>' +
+                        '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">' + systemicBadge + supplierBadge + '</div>' +
+                    '</div>' +
+                    '<div class="item-controls">' +
+                        '<div class="input-group-inline">' +
+                            '<input type="number" class="qty-input" value="' + itemState.n_op + '" placeholder="Qt." onchange="window.updateItemData(\'' + stateKey + '\', \'n_op\', this.value)">' +
+                            '<span class="unit-label">' + (item.unit || 'pz') + '</span>' +
+                        '</div>' +
+                        '<div class="custom-checkbox ' + (itemState.done ? 'checked' : '') + '" onclick="window.toggleDone(\'' + stateKey + '\')">' + checkboxHtml + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="item-sub" style="margin-top: 8px;">' +
+                    '<input type="text" class="note-input" value="' + (itemState.note || '') + '" placeholder="Aggiungi nota operativa..." onchange="window.updateItemData(\'' + stateKey + '\', \'note\', this.value)">' +
+                '</div>';
 
             if (isAdmin) {
                 let pressTimer;
@@ -279,7 +288,7 @@ function renderMainContent() {
             addItemBtn.style.margin = '16px';
             addItemBtn.style.width = 'calc(100% - 32px)';
             addItemBtn.style.border = '1px dashed var(--border)';
-            addItemBtn.innerHTML = `<i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO`;
+            addItemBtn.innerHTML = '<i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO';
             addItemBtn.onclick = () => window.openItemModal(sectionId);
             sectionDiv.appendChild(addItemBtn);
         }
@@ -293,7 +302,7 @@ function renderMainContent() {
         addSectionBtn.style.width = '100%';
         addSectionBtn.style.marginTop = '24px';
         addSectionBtn.style.border = '1px dashed var(--text-muted)';
-        addSectionBtn.innerHTML = `<i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA`;
+        addSectionBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA';
         addSectionBtn.onclick = () => window.openSectionModal();
         content.appendChild(addSectionBtn);
     }
