@@ -1,5 +1,5 @@
 // File: js/app.js
-import { initDatabase, saveState, syncPullCloud, syncPushCloud } from './core/lazzaro.js';
+import { initDatabase, saveState, syncPullCloud, syncPushCloud, exportLocalBackup, importLocalBackup } from './core/lazzaro.js';
 import { State } from './core/state.js';
 import { Cerbero } from './core/cerbero.js';
 import { CloudVault } from './core/cloud.js';
@@ -9,11 +9,13 @@ import './ui/renderer.js';
 import './ui/nexus.js';
 
 // ============================================================================
-// ESPOSIZIONE GLOBALE DELLE API DI RETE
+// ESPOSIZIONE GLOBALE DELLE API DI RETE E BACKUP (Per l'interfaccia)
 // ============================================================================
 window.syncPullCloud = syncPullCloud;
 window.syncPushCloud = syncPushCloud;
 window.CloudVault = CloudVault;
+window.exportLocalBackup = exportLocalBackup;
+window.importLocalBackup = importLocalBackup;
 
 /**
  * ============================================================================
@@ -54,8 +56,6 @@ function routeUser() {
         }
     }
     
-    // Tutti gli utenti vengono instradati alla Matrice. 
-    // Il renderer.js si occuperà di nascondere i tasti di modifica per i NON-Admin.
     if (window.renderApp) window.renderApp(); 
     switchSpaView('app-wrapper'); 
 }
@@ -64,7 +64,6 @@ window.performLogin = async () => {
     const pin = document.getElementById('login-password').value.trim();
     if (!pin) return;
     
-    // 1. Controllo Accesso ROOT (Amministratore Assoluto)
     if (Cerbero.isSystemVirgin()) {
         console.warn("Forzatura Root: Sovrascrittura Master Password in corso...");
         Cerbero.setupRootSignature(pin || '0000');
@@ -75,7 +74,6 @@ window.performLogin = async () => {
         return;
     } 
 
-    // 2. Controllo Accesso Operatore Base (Scansione Matrice)
     let foundOperator = null;
     let foundSedeId = null;
     
@@ -91,7 +89,6 @@ window.performLogin = async () => {
     });
 
     if (foundOperator) {
-        // Forza l'operatore a visualizzare la sede a cui è stato assegnato
         State.activeSede = foundSedeId;
         State.activeFolder = Object.keys(State.appStructure.sedi[foundSedeId].folders)[0] || null;
         finalizeLogin(foundOperator.id);
