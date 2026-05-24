@@ -1,16 +1,13 @@
 <!DOCTYPE html>
 <html lang="it" data-theme="dark">
 <head>
-    <script src="//cdn.jsdelivr.net/npm/eruda"></script>
-<script>eruda.init();</script>
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0D0907">
     
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://api.jsonbin.io https://keyvalue.immanuel.co;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://api.jsonbin.io https://keyvalue.immanuel.co;; proxy-src 'none';">
 
     <title>Scutum ERP V15.8 Absolute</title>
     
@@ -21,16 +18,160 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
 
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/layout.css">
 </head>
 <body>
+
     <div id="toast-container"></div>
 
-    <div id="app-root"></div>
+    <div id="app-root">
+        
+        <div id="auth-screen" class="spa-view active" style="justify-content: center; align-items: center; padding: 24px;">
+            <div class="card" style="width: 100%; max-width: 400px; padding: 32px; text-align: center; border: 1px solid var(--accent); box-shadow: 0 0 40px rgba(201, 164, 100, 0.1);">
+                <i class="fa-solid fa-shield-halved" style="font-size: 4rem; color: var(--accent); margin-bottom: 24px;"></i>
+                <h2 style="color: var(--accent); margin-bottom: 8px; letter-spacing: 2px;">SCUTUM ERP</h2>
+                <p style="color: var(--text-muted); margin-bottom: 32px; font-weight: 700; text-transform: uppercase;">Identificazione Operatore</p>
+                
+                <div class="input-group">
+                    <input type="password" id="login-password" placeholder="INSERISCI PIN" style="text-align: center; letter-spacing: 8px; font-size: 1.5rem;">
+                </div>
+                
+                <button class="btn-action solid" onclick="window.performLogin()" style="margin-top: 16px;">
+                    <i class="fa-solid fa-fingerprint"></i> ACCEDI AL SISTEMA
+                </button>
+            </div>
+        </div>
+        
+        <div id="checklist-hub" class="spa-view" style="padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+                <h1 style="font-weight: 800; font-size: 1.5rem;">LINEA DI SPUNTA</h1>
+                <button class="btn-action" style="width:auto; padding:12px;" onclick="localStorage.removeItem('nexus_session'); window.location.reload();">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+            <div id="checklist-content"></div>
+        </div>
+        
+        <div id="app-wrapper" class="spa-view" style="flex-direction: row;">
+            
+            <aside class="sidebar" id="main-sidebar">
+                <div class="sidebar-logo">
+                    <i class="fa-solid fa-shield-halved"></i> SCUTUM
+                    <i class="fa-solid fa-xmark" id="sidebar-close" style="display:none; margin-left:auto; cursor:pointer; font-size: 1.5rem;" onclick="document.getElementById('main-sidebar').classList.remove('open')"></i>
+                </div>
+                
+                <div style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 1px;">RETI LOGISTICHE</div>
+                <div id="sedi-menu" style="margin-bottom: 24px;"></div>
+                
+                <div style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 1px;">FILTRI MATRICE</div>
+                <div id="categories-filter-menu"></div>
+                
+                <div class="nav-item nexus" data-action="openNexusHub" onclick="document.querySelectorAll('.spa-view').forEach(v => v.classList.remove('active')); document.getElementById('nexus-hub').classList.add('active'); window.renderNexusHub?.();">
+                    <i class="fa-solid fa-fire-burner"></i> HUB NEXUS
+                </div>
 
-    <div id="modal-layer"></div>
+                <div class="sidebar-footer" style="margin-top: auto; padding-top: 24px; border-top: 1px solid var(--border);">
+                    <div style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">OPERATORE ATTIVO</div>
+                    <div id="current-user-label" style="font-weight: 800; color: var(--accent); font-size: 1.1rem;">---</div>
+                    <button class="btn-action" style="padding: 10px; margin-top: 12px; font-size: 0.9rem;" onclick="localStorage.removeItem('nexus_session'); window.location.reload();">
+                        <i class="fa-solid fa-right-from-bracket"></i> Sloggati
+                    </button>
+                </div>
+            </aside>
+
+            <main id="main-area">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <i class="fa-solid fa-bars" style="font-size: 1.5rem; color: var(--text); cursor: pointer;" onclick="document.getElementById('main-sidebar').classList.add('open')"></i>
+                    <h1 id="header-title" style="font-weight: 800; letter-spacing: -1px; font-size: 1.5rem; text-transform: uppercase;">CARICAMENTO...</h1>
+                    <div style="width: 24px;"></div>
+                </div>
+
+                <div class="search-pill">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" id="search-input" placeholder="Cerca prodotto o nota..." data-action="searchItem">
+                </div>
+
+                <div id="folders-menu" style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px; margin-bottom: 16px;"></div>
+                
+                <div id="main-content"></div>
+                
+                <button id="floating-paste-btn" class="btn-action solid" style="display:none; position:fixed; bottom:24px; right:24px; width:auto; border-radius:100px; box-shadow: 0 10px 30px rgba(201, 164, 100, 0.4); z-index: 1000;" data-action="pasteSection">
+                    <i class="fa-solid fa-paste"></i> INCOLLA MATRICE
+                </button>
+            </main>
+        </div>
+        
+        <div id="nexus-hub" class="spa-view" style="padding: 24px; overflow-y: auto; height: 100%;">
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 32px;">
+                <button class="btn-action" style="width: auto; padding: 12px 20px;" onclick="document.querySelectorAll('.spa-view').forEach(v => v.classList.remove('active')); document.getElementById('app-wrapper').classList.add('active');"><i class="fa-solid fa-arrow-left"></i> REPARTI</button>
+                <h1 style="font-weight: 800; font-size: 1.5rem; color: var(--nexus);">NEXUS LOGISTICA CENTRALE</h1>
+            </div>
+            <div id="nexus-content"></div>
+        </div>
+
+    </div>
+
+    <div id="modal-layer">
+        
+        <div id="modal-sede" class="modal-overlay" onclick="if(event.target===this) history.back();">
+            <div class="modal-box">
+                <h2 style="margin-bottom: 24px; color: var(--accent);">CONFIGURAZIONE SEDE</h2>
+                <div class="input-group">
+                    <label>Nome Sede / Punto Vendita</label>
+                    <input type="text" id="input-sede-name" placeholder="Es. Appio Latino, Prati, Laboratorio...">
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: auto;">
+                    <button class="btn-action" onclick="history.back();">ANNULLA</button>
+                    <button class="btn-action solid" data-action="saveSedeConfirm">SALVA FIRMA</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-folder" class="modal-overlay" onclick="if(event.target===this) history.back();">
+            <div class="modal-box">
+                <h2 style="margin-bottom: 24px; color: var(--accent);">CONFIGURAZIONE REPARTO / TURNO</h2>
+                <div class="input-group">
+                    <label>Nome Turno Operativo</label>
+                    <input type="text" id="input-folder-name" placeholder="Es. Mattina, Sera, Pre-Servizio...">
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: auto;">
+                    <button class="btn-action" onclick="history.back();">ANNULLA</button>
+                    <button class="btn-action solid" data-action="saveFolderConfirm">SALVA ARCHITETTURA</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-section" class="modal-overlay" onclick="if(event.target===this) history.back();">
+            <div class="modal-box">
+                <h2 style="margin-bottom: 24px; color: var(--accent);">CELLA LOGICA (GRUPPO)</h2>
+                <div class="input-group">
+                    <label>Nome Gruppo Lavoro</label>
+                    <input type="text" id="input-section-name" placeholder="Es. Linea Forno, Prep. Materie Prime...">
+                </div>
+                <div class="input-group">
+                    <label>Inquadramento Cromatico Categoria</label>
+                    <select id="input-section-color"></select>
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: auto;">
+                    <button class="btn-action" onclick="history.back();">ANNULLA</button>
+                    <button class="btn-action solid" data-action="saveSectionConfirm">CONGELA STRUTTURA</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-info" class="modal-overlay" onclick="if(event.target===this) history.back();">
+            <div class="modal-box" style="max-width: 500px;">
+                <h2 id="read-info-title" style="margin-bottom: 16px; color: var(--accent); border-bottom: 2px solid var(--border); padding-bottom: 12px; text-transform: uppercase;">INFO</h2>
+                <div id="read-info-content" style="font-size: 1.1rem; line-height: 1.6; color: var(--text); overflow-y: auto; max-height: 50dvh; padding-right: 8px; font-weight: 600;"></div>
+                <button class="btn-action solid" onclick="history.back();" style="margin-top: 32px;">CHIUDI SCHEDA</button>
+            </div>
+        </div>
+
+    </div>
 
     <script type="module" src="./js/app.js"></script>
 </body>
