@@ -18,7 +18,6 @@ function applyRolePermissions() {
         if (isAdmin) {
             userLabel.innerText = 'ROOT (AMMINISTRATORE)';
         } else {
-            // Cerca il nome dell'operatore nel database
             let opName = 'OPERATORE STANDARD';
             if (State.activeSede && State.appStructure.sedi[State.activeSede].roles) {
                 const op = State.appStructure.sedi[State.activeSede].roles.find(r => r.id === State.activeProfile);
@@ -35,7 +34,6 @@ function applyRolePermissions() {
  * ============================================================================
  */
 window.renderApp = () => {
-    // Seleziona la prima sede disponibile se nessuna è attiva
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
@@ -58,7 +56,6 @@ function renderSidebar() {
     const isAdmin = State.activeProfile === 'admin';
     sediMenu.innerHTML = '';
 
-    // Disegna le Sedi Logistiche
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
@@ -81,7 +78,6 @@ function renderSidebar() {
         sediMenu.appendChild(div);
     });
 
-    // Strumenti Amministratore
     if (isAdmin) {
         const addSedeBtn = document.createElement('div');
         addSedeBtn.className = 'nav-item add-btn';
@@ -89,7 +85,6 @@ function renderSidebar() {
         addSedeBtn.onclick = () => window.openSedeModal();
         sediMenu.appendChild(addSedeBtn);
 
-        // INIEZIONE MODULO GESTIONE OPERATORI (Solo ROOT)
         const operatorBtn = document.createElement('div');
         operatorBtn.className = 'nav-item';
         operatorBtn.style.marginTop = '16px';
@@ -103,14 +98,13 @@ function renderSidebar() {
         };
         sediMenu.appendChild(operatorBtn);
 
-        // INIEZIONE MODULO CLOUD VAULT (Solo ROOT)
         const cloudBtn = document.createElement('div');
         cloudBtn.className = 'nav-item';
         cloudBtn.style.marginTop = '8px';
         cloudBtn.style.color = 'var(--nexus)';
         cloudBtn.style.border = '1px solid rgba(155, 89, 182, 0.3)';
         cloudBtn.style.background = 'rgba(155, 89, 182, 0.05)';
-        cloudBtn.innerHTML = `<i class="fa-solid fa-cloud"></i> CONFIGURA CLOUD`;
+        cloudBtn.innerHTML = `<i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI`;
         cloudBtn.onclick = () => { 
             window.openCloudModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -118,7 +112,6 @@ function renderSidebar() {
         sediMenu.appendChild(cloudBtn);
     }
 
-    // Disegna Filtri Categorie Matrice
     const filtersMenu = document.getElementById('categories-filter-menu');
     if (!filtersMenu) return;
     filtersMenu.innerHTML = '';
@@ -238,6 +231,9 @@ function renderMainContent() {
             const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
             const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
             
+            const systemicBadge = item.isSystemic ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:${section.color}20; color:${section.color};"><i class="fa-solid fa-link"></i> NEXUS</span>` : '';
+            const supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${item.supplier} ${item.sku ? `[${item.sku}]` : ''}</span>` : '';
+            
             const itemDiv = document.createElement('div');
             itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
             
@@ -245,7 +241,10 @@ function renderMainContent() {
                 <div class="item-main">
                     <div class="item-name-group">
                         <span class="item-name">${item.name}</span>
-                        ${item.isSystemic ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:${section.color}20; color:${section.color};"><i class="fa-solid fa-link"></i> NEXUS</span>` : ''}
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                            ${systemicBadge}
+                            ${supplierBadge}
+                        </div>
                     </div>
                     
                     <div class="item-controls">
@@ -265,7 +264,6 @@ function renderMainContent() {
                 </div>
             `;
 
-            // Il long press di modifica funziona solo per l'amministratore
             if (isAdmin) {
                 let pressTimer;
                 itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editItem(sectionId, item.id), 800); };
