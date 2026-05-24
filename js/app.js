@@ -1,12 +1,19 @@
 // File: js/app.js
-import { initDatabase, saveState } from './core/lazzaro.js';
+import { initDatabase, saveState, syncPullCloud, syncPushCloud } from './core/lazzaro.js';
 import { State } from './core/state.js';
 import { Cerbero } from './core/cerbero.js';
+import { CloudVault } from './core/cloud.js';
 import { showToast, switchSpaView, haptic } from './ui/events.js';
 
-// Pre-Caricamento dei Moduli Visivi (Verranno eseguiti non appena li creerai nel prossimo step)
 import './ui/renderer.js';
 import './ui/nexus.js';
+
+// ============================================================================
+// ESPOSIZIONE GLOBALE DELLE API DI RETE (Per i bottoni dell'interfaccia)
+// ============================================================================
+window.syncPullCloud = syncPullCloud;
+window.syncPushCloud = syncPushCloud;
+window.CloudVault = CloudVault;
 
 /**
  * ============================================================================
@@ -43,7 +50,6 @@ function routeUser() {
             State.activeSede = primeSede;
             State.activeFolder = Object.keys(State.appStructure.sedi[primeSede].folders)[0] || null;
         } else {
-            // Se non ci sono sedi, forza la creazione (Sblocco interfaccia)
             State.activeSede = null; 
         }
     }
@@ -108,12 +114,10 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Avvio applicazione PWA
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').catch(() => {});
     });
 }
 
-// Innesco del Big Bang
 window.onload = bootSystem;
