@@ -8,30 +8,21 @@ import { showToast, switchSpaView, haptic } from './ui/events.js';
 import './ui/renderer.js';
 import './ui/nexus.js';
 
-// ============================================================================
-// ESPOSIZIONE GLOBALE DELLE API DI RETE E BACKUP (Per l'interfaccia)
-// ============================================================================
+// Esposizione per l'interfaccia
 window.syncPullCloud = syncPullCloud;
 window.syncPushCloud = syncPushCloud;
 window.CloudVault = CloudVault;
 window.exportLocalBackup = exportLocalBackup;
 window.importLocalBackup = importLocalBackup;
 
-/**
- * ============================================================================
- * BOOTLOADER GLOBALE E GESTIONE SESSIONI
- * ============================================================================
- */
 async function bootSystem() {
     try {
         console.info("[Bootloader] Inizializzazione Core Lazzaro...");
         await initDatabase();
-        console.info("[Bootloader] Motore database allineato. Avvio controlli di sicurezza...");
-        
         checkAuthentication();
     } catch (e) {
         console.error("[Fatal Error]", e);
-        showToast("Errore critico avvio sistema.", "error");
+        showToast("Errore critico avvio database.", "error");
     }
 }
 
@@ -61,7 +52,9 @@ function routeUser() {
 }
 
 window.performLogin = async () => {
-    const pin = document.getElementById('login-password').value.trim();
+    const pinInput = document.getElementById('login-password');
+    if (!pinInput) return;
+    const pin = pinInput.value.trim();
     if (!pin) return;
     
     if (Cerbero.isSystemVirgin()) {
@@ -97,7 +90,7 @@ window.performLogin = async () => {
         haptic(50);
     }
     
-    document.getElementById('login-password').value = ''; 
+    pinInput.value = ''; 
     haptic();
 };
 
@@ -110,17 +103,10 @@ function finalizeLogin(profileId) {
     routeUser(); 
 }
 
-/**
- * ============================================================================
- * VISIBILITY API (Purificazione Notturna Automatica)
- * ============================================================================
- */
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         const currentStamp = new Date().toLocaleDateString('it-IT');
         if (localStorage.getItem('nexus_day') && localStorage.getItem('nexus_day') !== currentStamp) {
-            console.info("[Midnight API] Rilevato cambio data. Purificazione turno in corso...");
-            
             Object.keys(State.appState).forEach(key => {
                 State.appState[key].done = false;
                 State.appState[key].n_op = '';
@@ -128,17 +114,12 @@ document.addEventListener('visibilitychange', () => {
             
             saveState().then(() => {
                 localStorage.setItem('nexus_day', currentStamp);
-                showToast("Nuovo Turno Inizializzato automaticamente.", "info");
+                showToast("Nuovo Turno Inizializzato.", "info");
                 if (window.renderApp) window.renderApp(); 
             });
         }
     }
 });
 
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
-}
-
-window.onload = bootSystem;
+// Avvio esplicito forzato
+bootSystem();
