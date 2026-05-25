@@ -3,7 +3,7 @@ import { State } from '../core/state.js';
 
 /**
  * ============================================================================
- * CONTROLLER DI ACCESSO E PERMESSI
+ * CONTROLLER DI ACCESSO E PERMESSI (RBAC)
  * ============================================================================
  */
 function applyRolePermissions() {
@@ -46,7 +46,7 @@ window.renderApp = () => {
 
 /**
  * ============================================================================
- * RENDERER: SIDEBAR
+ * RENDERER: SIDEBAR (CON PREPARAZIONE MODULO TIMBRATURE)
  * ============================================================================
  */
 function renderSidebar() {
@@ -56,6 +56,21 @@ function renderSidebar() {
     const isAdmin = State.activeProfile === 'admin';
     sediMenu.innerHTML = '';
 
+    // INNESTO MASTER BLUEPRINT: MODULO TIMBRATURE (Visibile a tutti)
+    const timeBtn = document.createElement('div');
+    timeBtn.className = 'nav-item time-tracking';
+    timeBtn.style.color = '#3498db';
+    timeBtn.style.border = '1px solid rgba(52, 152, 219, 0.3)';
+    timeBtn.style.background = 'rgba(52, 152, 219, 0.05)';
+    timeBtn.style.marginBottom = '16px';
+    timeBtn.innerHTML = '<i class="fa-solid fa-clock"></i> TIMBRATURE (PRESENZE)';
+    timeBtn.onclick = () => {
+        // Verrà attivato nel prossimo blocco
+        window.showToast("Modulo Timbrature in fase di allineamento...", "info");
+    };
+    sediMenu.appendChild(timeBtn);
+
+    // RENDERING SEDI
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
@@ -78,6 +93,7 @@ function renderSidebar() {
         sediMenu.appendChild(div);
     });
 
+    // COMANDI ROOT
     if (isAdmin) {
         const addSedeBtn = document.createElement('div');
         addSedeBtn.className = 'nav-item add-btn';
@@ -91,7 +107,7 @@ function renderSidebar() {
         operatorBtn.style.color = 'var(--accent)';
         operatorBtn.style.border = '1px solid rgba(201, 164, 100, 0.3)';
         operatorBtn.style.background = 'rgba(201, 164, 100, 0.05)';
-        operatorBtn.innerHTML = '<i class="fa-solid fa-users"></i> GESTIONE OPERATORI';
+        operatorBtn.innerHTML = '<i class="fa-solid fa-users"></i> GESTIONE OPERATORI E PERMESSI';
         operatorBtn.onclick = () => { 
             window.openOperatorListModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -104,7 +120,7 @@ function renderSidebar() {
         cloudBtn.style.color = 'var(--nexus)';
         cloudBtn.style.border = '1px solid rgba(155, 89, 182, 0.3)';
         cloudBtn.style.background = 'rgba(155, 89, 182, 0.05)';
-        cloudBtn.innerHTML = '<i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI';
+        cloudBtn.innerHTML = '<i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI CLOUD';
         cloudBtn.onclick = () => { 
             window.openCloudModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -112,6 +128,7 @@ function renderSidebar() {
         sediMenu.appendChild(cloudBtn);
     }
 
+    // FILTRI CATEGORIE
     const filtersMenu = document.getElementById('categories-filter-menu');
     if (!filtersMenu) return;
     filtersMenu.innerHTML = '';
@@ -134,7 +151,7 @@ function renderSidebar() {
 
 /**
  * ============================================================================
- * RENDERER: TURNI 
+ * RENDERER: TURNI (FOLDERS)
  * ============================================================================
  */
 function renderFolders() {
@@ -180,7 +197,7 @@ function renderFolders() {
 
 /**
  * ============================================================================
- * RENDERER: MATRICE CENTRALE
+ * RENDERER: MATRICE CENTRALE E CELLE LOGICHE
  * ============================================================================
  */
 function renderMainContent() {
@@ -203,7 +220,14 @@ function renderMainContent() {
 
     const currentSedeName = State.appStructure.sedi[State.activeSede].name;
     const currentFolderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
-    headerTitle.innerText = currentSedeName + ' // ' + currentFolderName;
+    
+    // INNESTO KILL SWITCH NELL'HEADER (Solo ROOT)
+    let killSwitchHtml = '';
+    if (isAdmin) {
+        killSwitchHtml = '<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET</button>';
+    }
+
+    headerTitle.innerHTML = currentSedeName + ' // ' + currentFolderName + killSwitchHtml;
 
     const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
 
