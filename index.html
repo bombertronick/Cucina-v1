@@ -110,6 +110,38 @@
             </div>
             <div id="nexus-content"></div>
         </div>
+
+        <div id="time-tracking-hub" class="spa-view" style="display: none; padding: 24px; overflow-y: auto; height: 100%;">
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 32px;">
+                <button class="btn-action" style="width: auto; padding: 12px 20px;" onclick="window.switchSpaView('app-wrapper');"><i class="fa-solid fa-arrow-left"></i></button>
+                <h1 style="font-weight: 800; font-size: 1.5rem; color: #3498db;"><i class="fa-solid fa-clock"></i> TIMBRATURE</h1>
+            </div>
+
+            <div class="card" style="margin-bottom: 32px; padding: 24px; text-align: center; border-color: rgba(52, 152, 219, 0.3);">
+                <div id="time-status-badge" style="display: inline-block; padding: 6px 16px; border-radius: 100px; background: rgba(255,255,255,0.05); color: var(--text-muted); font-size: 0.8rem; font-weight: 800; margin-bottom: 16px; letter-spacing: 1px;">STATO: NON OPERATIVO</div>
+                
+                <h2 id="time-current-operator" style="font-size: 1.8rem; font-weight: 800; margin-bottom: 8px;">NOME OPERATORE</h2>
+                <div id="time-current-clock" style="font-size: 3.5rem; font-weight: 800; color: #3498db; font-variant-numeric: tabular-nums; margin-bottom: 24px; letter-spacing: 2px;">00:00:00</div>
+
+                <div style="display: flex; gap: 16px; justify-content: center;">
+                    <button id="btn-clock-in" class="btn-action solid" style="background: rgba(46, 204, 113, 0.1); color: var(--success); border-color: var(--success); padding: 16px 32px; font-size: 1.1rem;" onclick="window.performClockIn()"><i class="fa-solid fa-play"></i> ENTRATA</button>
+                    <button id="btn-clock-out" class="btn-action solid" style="background: rgba(231, 76, 60, 0.1); color: var(--danger); border-color: var(--danger); padding: 16px 32px; font-size: 1.1rem; display: none;" onclick="window.performClockOut()"><i class="fa-solid fa-stop"></i> USCITA</button>
+                </div>
+                
+                <div class="input-group" style="margin-top: 24px; text-align: left;">
+                    <input type="text" id="input-time-note" placeholder="Note turno (es. Ritardo treno, Mansione speciale...)" style="border-color: rgba(52, 152, 219, 0.3);">
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 16px;">
+                <h3 style="font-weight: 800; font-size: 1rem; color: var(--text-muted); margin:0;">REGISTRO TURNI (ULTIMI 7 GIORNI)</h3>
+                <span id="time-total-hours" style="font-weight: 800; font-size: 1.1rem; color: #3498db;">0h 0m</span>
+            </div>
+            
+            <div id="time-records-list">
+                <div style="text-align:center; padding: 20px; color: var(--text-muted); font-style: italic;">Nessun turno registrato.</div>
+            </div>
+        </div>
     </div>
 
     <div id="modal-layer"></div>
