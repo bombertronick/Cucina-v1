@@ -20,7 +20,7 @@ window.renderNexusHub = () => {
             Object.keys(folder.sections).forEach(sectionId => {
                 const section = folder.sections[sectionId];
                 section.items.forEach(item => {
-                    const stateKey = `${sedeId}_${folderId}_${sectionId}_${item.id}`;
+                    const stateKey = sedeId + '_' + folderId + '_' + sectionId + '_' + item.id;
                     const itemState = State.appState[stateKey];
                     
                     if (itemState && (itemState.done || (itemState.n_op && parseFloat(itemState.n_op) > 0))) {
@@ -88,14 +88,84 @@ window.renderNexusHub = () => {
 
 /**
  * ============================================================================
- * MOTORE DI EDITING E SALVATAGGIO MATRICE LOGISTICA (CRUD STRUTTURA)
+ * KILL SWITCH (AZZERAMENTO MANUALE TURNO ATTIVO)
  * ============================================================================
  */
+window.nukeCurrentTurnLogic = async () => {
+    if (!State.activeSede || !State.activeFolder) return;
+    
+    const confirmNuke = confirm("ATTENZIONE: Stai per svuotare completamente tutte le spunte e le quantità di questo turno.\nVuoi procedere?");
+    if (!confirmNuke) return;
+
+    const prefix = State.activeSede + '_' + State.activeFolder + '_';
+    
+    Object.keys(State.appState).forEach(key => {
+        if (key.startsWith(prefix)) {
+            State.appState[key].done = false;
+            State.appState[key].n_op = '';
+        }
+    });
+
+    window.showToast("Turno svuotato e ripristinato.", "info");
+    if (window.renderApp) window.renderApp();
+    await saveState();
+    window.haptic(50);
+};
+
+/**
+ * ============================================================================
+ * INIEZIONE MODALI STRUTTURALI (SEDI, TURNI, CELLE)
+ * ============================================================================
+ */
+function injectStructuralModals() {
+    const layer = document.getElementById('modal-layer');
+    if (!layer) return;
+
+    if (!document.getElementById('modal-sede')) {
+        layer.insertAdjacentHTML('beforeend', '<div id="modal-sede" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="sede-modal-title" style="margin-bottom: 24px; color: var(--accent);">RETE LOGISTICA</h2><div class="input-group"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Sede (es. Fiumicino)</label><input type="text" id="input-sede-name" placeholder="Nome sede..."></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-sede" onclick="window.deleteSedeLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSedeLogic()">SALVA</button></div></div></div>');
+    }
+
+    if (!document.getElementById('modal-folder')) {
+        layer.insertAdjacentHTML('beforeend', '<div id="modal-folder" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="folder-modal-title" style="margin-bottom: 24px; color: var(--accent);">TURNO OPERATIVO</h2><div class="input-group"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Turno (es. Mattina, Chiusura)</label><input type="text" id="input-folder-name" placeholder="Nome turno..."></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-folder" onclick="window.deleteFolderLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveFolderLogic()">SALVA</button></div></div></div>');
+    }
+
+    if (!document.getElementById('modal-section')) {
+        layer.insertAdjacentHTML('beforeend', '<div id="modal-section" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="section-modal-title" style="margin-bottom: 24px; color: var(--accent);">CELLA LOGICA</h2><div class="input-group" style="margin-bottom: 16px;"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Nome Cella (es. Frigo Pizze)</label><input type="text" id="input-section-name" placeholder="Nome cella..."></div><div class="input-group"><label style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">Linea di appartenenza (Colore)</label><select id="input-section-color"><option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option><option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option><option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option><option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option><option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option></select></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-section" onclick="window.deleteSectionLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSectionLogic()">SALVA</button></div></div></div>');
+    }
+}
+
+/**
+ * ============================================================================
+ * CRUD STRUTTURA (SEDI, TURNI, CELLE LOGICHE)
+ * ============================================================================
+ */
+window.openSedeModal = () => {
+    injectStructuralModals();
+    window._editContext = { type: 'sede', isNew: true };
+    document.getElementById('sede-modal-title').innerText = 'NUOVA RETE LOGISTICA';
+    document.getElementById('input-sede-name').value = '';
+    document.getElementById('btn-delete-sede').style.display = 'none';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-sede').style.display = 'flex';
+};
+
+window.editSede = (sedeId) => {
+    injectStructuralModals();
+    window._editContext = { type: 'sede', id: sedeId, isNew: false };
+    document.getElementById('sede-modal-title').innerText = 'MODIFICA RETE LOGISTICA';
+    document.getElementById('input-sede-name').value = State.appStructure.sedi[sedeId].name;
+    document.getElementById('btn-delete-sede').style.display = 'block';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-sede').style.display = 'flex';
+};
+
 window.saveSedeLogic = async () => {
     const name = document.getElementById('input-sede-name').value.trim();
     if (!name) { window.showToast("Nome sede obbligatorio", "error"); return; }
     
-    if (window._editContext && window._editContext.type === 'sede') {
+    if (!window._editContext.isNew) {
         State.appStructure.sedi[window._editContext.id].name = name;
         window.showToast("Sede aggiornata", "success");
     } else {
@@ -107,17 +177,47 @@ window.saveSedeLogic = async () => {
     window.closeModals(); window.renderApp(); await saveState();
 };
 
-window.editSede = (sedeId) => {
-    window._editContext = { type: 'sede', id: sedeId };
-    window.openSedeModal();
-    document.getElementById('input-sede-name').value = State.appStructure.sedi[sedeId].name;
+window.deleteSedeLogic = async () => {
+    const rasiAlSuolo = confirm("DISTRUZIONE CRITICA:\nEliminando questa Sede perderai TUTTI i Turni, i Prodotti e gli Operatori al suo interno.\n\nProcedere?");
+    if (!rasiAlSuolo) return;
+    
+    delete State.appStructure.sedi[window._editContext.id];
+    if (State.activeSede === window._editContext.id) {
+        State.activeSede = Object.keys(State.appStructure.sedi)[0] || null;
+        State.activeFolder = State.activeSede ? (Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null) : null;
+    }
+    
+    window.closeModals(); window.renderApp(); await saveState(); window.showToast("Rete disintegrata.", "info");
+};
+
+// FOLDERS (TURNI)
+window.openFolderModal = () => {
+    injectStructuralModals();
+    window._editContext = { type: 'folder', isNew: true };
+    document.getElementById('folder-modal-title').innerText = 'NUOVO TURNO OPERATIVO';
+    document.getElementById('input-folder-name').value = '';
+    document.getElementById('btn-delete-folder').style.display = 'none';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-folder').style.display = 'flex';
+};
+
+window.editFolder = (folderId) => {
+    injectStructuralModals();
+    window._editContext = { type: 'folder', id: folderId, isNew: false };
+    document.getElementById('folder-modal-title').innerText = 'MODIFICA TURNO';
+    document.getElementById('input-folder-name').value = State.appStructure.sedi[State.activeSede].folders[folderId].name;
+    document.getElementById('btn-delete-folder').style.display = 'block';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-folder').style.display = 'flex';
 };
 
 window.saveFolderLogic = async () => {
     const name = document.getElementById('input-folder-name').value.trim();
     if (!name || !State.activeSede) return;
     
-    if (window._editContext && window._editContext.type === 'folder') {
+    if (!window._editContext.isNew) {
         State.appStructure.sedi[State.activeSede].folders[window._editContext.id].name = name;
     } else {
         const newId = 'fold_' + Date.now();
@@ -127,10 +227,40 @@ window.saveFolderLogic = async () => {
     window.closeModals(); window.renderApp(); await saveState();
 };
 
-window.editFolder = (folderId) => {
-    window._editContext = { type: 'folder', id: folderId };
-    window.openFolderModal();
-    document.getElementById('input-folder-name').value = State.appStructure.sedi[State.activeSede].folders[folderId].name;
+window.deleteFolderLogic = async () => {
+    if (!confirm("Sei sicuro di voler radere al suolo questo Turno e tutte le sue celle?")) return;
+    
+    delete State.appStructure.sedi[State.activeSede].folders[window._editContext.id];
+    if (State.activeFolder === window._editContext.id) {
+        State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null;
+    }
+    
+    window.closeModals(); window.renderApp(); await saveState(); window.showToast("Turno eliminato.", "info");
+};
+
+// SECTIONS (CELLE LOGICHE)
+window.openSectionModal = () => {
+    injectStructuralModals();
+    window._editContext = { type: 'section', isNew: true };
+    document.getElementById('section-modal-title').innerText = 'NUOVA CELLA LOGICA';
+    document.getElementById('input-section-name').value = '';
+    document.getElementById('btn-delete-section').style.display = 'none';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-section').style.display = 'flex';
+};
+
+window.editSection = (sectionId) => {
+    injectStructuralModals();
+    window._editContext = { type: 'section', id: sectionId, isNew: false };
+    document.getElementById('section-modal-title').innerText = 'MODIFICA CELLA LOGICA';
+    const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId];
+    document.getElementById('input-section-name').value = sec.name;
+    document.getElementById('input-section-color').value = sec.color;
+    document.getElementById('btn-delete-section').style.display = 'block';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-section').style.display = 'flex';
 };
 
 window.saveSectionLogic = async () => {
@@ -138,7 +268,7 @@ window.saveSectionLogic = async () => {
     const color = document.getElementById('input-section-color').value;
     if (!name || !State.activeSede || !State.activeFolder) return;
     
-    if (window._editContext && window._editContext.type === 'section') {
+    if (!window._editContext.isNew) {
         const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id];
         sec.name = name;
         sec.color = color;
@@ -149,34 +279,12 @@ window.saveSectionLogic = async () => {
     window.closeModals(); window.renderApp(); await saveState();
 };
 
-window.editSection = (sectionId) => {
-    window._editContext = { type: 'section', id: sectionId };
-    window.openSectionModal();
-    const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId];
-    document.getElementById('input-section-name').value = sec.name;
-    document.getElementById('input-section-color').value = sec.color;
-};
-
-// APERTURA MODALI STRUTTURALI
-window.openSedeModal = () => {
-    document.getElementById('modal-layer').style.display = 'flex';
-    document.getElementById('modal-sede').style.display = 'flex';
-    document.getElementById('input-sede-name').value = '';
-};
-
-window.openFolderModal = () => {
-    document.getElementById('modal-layer').style.display = 'flex';
-    document.getElementById('modal-folder').style.display = 'flex';
-    document.getElementById('input-folder-name').value = '';
-};
-
-window.openSectionModal = () => {
-    document.getElementById('modal-layer').style.display = 'flex';
-    document.getElementById('modal-section').style.display = 'flex';
-    document.getElementById('input-section-name').value = '';
+window.deleteSectionLogic = async () => {
+    if (!confirm("Vuoi eliminare questa Cella Logica e tutti i prodotti al suo interno?")) return;
     
-    const select = document.getElementById('input-section-color');
-    select.innerHTML = '<option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option><option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option><option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option><option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option><option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option>';
+    delete State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id];
+    
+    window.closeModals(); window.renderApp(); await saveState(); window.showToast("Cella eliminata.", "info");
 };
 
 /**
