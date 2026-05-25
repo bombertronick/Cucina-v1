@@ -1,5 +1,6 @@
 // File: js/ui/renderer.js
 import { State } from '../core/state.js';
+import { saveState } from '../core/lazzaro.js'; // FIX: Importazione stabile in cima
 
 /**
  * ============================================================================
@@ -30,6 +31,30 @@ function applyRolePermissions() {
 
 /**
  * ============================================================================
+ * STEPPER MATEMATICO DINAMICO PER TIPOLOGIA MAGAZZINO
+ * ============================================================================
+ */
+window.hf_stepQty = async (stateKey, amount) => {
+    if (!State.appState[stateKey]) {
+        State.appState[stateKey] = { done: false, n_op: '0', note: '' };
+    }
+    let current = parseFloat(State.appState[stateKey].n_op) || 0;
+    current += amount;
+    if (current < 0) current = 0;
+    State.appState[stateKey].n_op = current.toString();
+    
+    window.renderApp();
+    await saveState(); // FIX: Salvataggio istantaneo sicuro
+    if (window.haptic) window.haptic(15);
+};
+
+// FIX: PONTE DI COMPATIBILITÀ PER INDEX.HTML
+window.renderNexusHub = () => {
+    if (window.hf_renderNexusHub) window.hf_renderNexusHub();
+};
+
+/**
+ * ============================================================================
  * RENDERER PRINCIPALE
  * ============================================================================
  */
@@ -46,7 +71,7 @@ window.renderApp = () => {
 
 /**
  * ============================================================================
- * RENDERER: SIDEBAR (CON PREPARAZIONE MODULO TIMBRATURE)
+ * RENDERER: SIDEBAR LOGISTICA INTERATTIVA
  * ============================================================================
  */
 function renderSidebar() {
@@ -56,21 +81,6 @@ function renderSidebar() {
     const isAdmin = State.activeProfile === 'admin';
     sediMenu.innerHTML = '';
 
-    // INNESTO MASTER BLUEPRINT: MODULO TIMBRATURE (Visibile a tutti)
-    const timeBtn = document.createElement('div');
-    timeBtn.className = 'nav-item time-tracking';
-    timeBtn.style.color = '#3498db';
-    timeBtn.style.border = '1px solid rgba(52, 152, 219, 0.3)';
-    timeBtn.style.background = 'rgba(52, 152, 219, 0.05)';
-    timeBtn.style.marginBottom = '16px';
-    timeBtn.innerHTML = '<i class="fa-solid fa-clock"></i> TIMBRATURE (PRESENZE)';
-    timeBtn.onclick = () => {
-        // Verrà attivato nel prossimo blocco
-        window.showToast("Modulo Timbrature in fase di allineamento...", "info");
-    };
-    sediMenu.appendChild(timeBtn);
-
-    // RENDERING SEDI
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
@@ -93,7 +103,6 @@ function renderSidebar() {
         sediMenu.appendChild(div);
     });
 
-    // COMANDI ROOT
     if (isAdmin) {
         const addSedeBtn = document.createElement('div');
         addSedeBtn.className = 'nav-item add-btn';
@@ -107,7 +116,7 @@ function renderSidebar() {
         operatorBtn.style.color = 'var(--accent)';
         operatorBtn.style.border = '1px solid rgba(201, 164, 100, 0.3)';
         operatorBtn.style.background = 'rgba(201, 164, 100, 0.05)';
-        operatorBtn.innerHTML = '<i class="fa-solid fa-users"></i> GESTIONE OPERATORI E PERMESSI';
+        operatorBtn.innerHTML = '<i class="fa-solid fa-users"></i> GESTIONE OPERATORI';
         operatorBtn.onclick = () => { 
             window.openOperatorListModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -120,7 +129,7 @@ function renderSidebar() {
         cloudBtn.style.color = 'var(--nexus)';
         cloudBtn.style.border = '1px solid rgba(155, 89, 182, 0.3)';
         cloudBtn.style.background = 'rgba(155, 89, 182, 0.05)';
-        cloudBtn.innerHTML = '<i class="fa-solid fa-database"></i> AMMINISTRAZIONE DATI CLOUD';
+        cloudBtn.innerHTML = '<i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT';
         cloudBtn.onclick = () => { 
             window.openCloudModal(); 
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
@@ -128,7 +137,6 @@ function renderSidebar() {
         sediMenu.appendChild(cloudBtn);
     }
 
-    // FILTRI CATEGORIE
     const filtersMenu = document.getElementById('categories-filter-menu');
     if (!filtersMenu) return;
     filtersMenu.innerHTML = '';
@@ -151,7 +159,7 @@ function renderSidebar() {
 
 /**
  * ============================================================================
- * RENDERER: TURNI (FOLDERS)
+ * RENDERER: TURNI OPERATIVI (FOLDERS)
  * ============================================================================
  */
 function renderFolders() {
@@ -197,7 +205,7 @@ function renderFolders() {
 
 /**
  * ============================================================================
- * RENDERER: MATRICE CENTRALE E CELLE LOGICHE
+ * RENDERER: MATRICE BRUTALISTA E CONTROLLI CONDIZIONALI
  * ============================================================================
  */
 function renderMainContent() {
@@ -221,7 +229,6 @@ function renderMainContent() {
     const currentSedeName = State.appStructure.sedi[State.activeSede].name;
     const currentFolderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
     
-    // INNESTO KILL SWITCH NELL'HEADER (Solo ROOT)
     let killSwitchHtml = '';
     if (isAdmin) {
         killSwitchHtml = '<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET</button>';
@@ -257,49 +264,58 @@ function renderMainContent() {
             const stateKey = State.activeSede + '_' + State.activeFolder + '_' + sectionId + '_' + item.id;
             const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
             
-            let systemicBadge = '';
-            if (item.isSystemic) {
-                systemicBadge = '<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:' + section.color + '20; color:' + section.color + ';">' +
-                                '<i class="fa-solid fa-link"></i> NEXUS</span>';
+            let typeBadge = '';
+            if (item.type === 'magazzino') {
+                typeBadge = '<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> CONVERSIONE (Ideal: ' + (item.idealQty || 0) + ' ' + (item.uom || 'pz') + ')</span>';
             }
 
             let supplierBadge = '';
             if (item.supplier) {
-                let skuText = '';
-                if (item.sku) skuText = '[' + item.sku + ']';
-                supplierBadge = '<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);">' +
-                                '<i class="fa-solid fa-truck"></i> ' + item.supplier + ' ' + skuText + '</span>';
+                supplierBadge = '<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ' + item.supplier + (item.sku ? ' ['+item.sku+']' : '') + '</span>';
             }
             
             const itemDiv = document.createElement('div');
             itemDiv.className = 'item-row ' + (itemState.done ? 'done' : '');
             
-            let checkboxHtml = '';
-            if (itemState.done) {
-                checkboxHtml = '<i class="fa-solid fa-check"></i>';
+            let controlsHtml = '';
+            
+            if (item.type === 'magazzino') {
+                controlsHtml = `
+                <div class="item-controls">
+                    <div style="display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:2px 4px;">
+                        <button onclick="window.hf_stepQty('${stateKey}', -1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">-</button>
+                        <input type="number" class="qty-input" value="${itemState.n_op || ''}" placeholder="0" style="width:50px; text-align:center; border:none; background:none; color:var(--text-main); font-weight:700; font-size:1.1rem;" onchange="window.updateItemData('${stateKey}', 'n_op', this.value); window.renderApp();">
+                        <button onclick="window.hf_stepQty('${stateKey}', 1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">+</button>
+                    </div>
+                    <span class="unit-label" style="font-weight:700; color:var(--text-muted); min-width:30px;">${item.uom || 'pz'}</span>
+                </div>`;
+            } else {
+                let checkboxHtml = itemState.done ? '<i class="fa-solid fa-check"></i>' : '';
+                controlsHtml = `
+                <div class="item-controls">
+                    <div class="input-group-inline">
+                        <input type="number" class="qty-input" value="${itemState.n_op || ''}" placeholder="Qt." onchange="window.updateItemData('${stateKey}', 'n_op', this.value)">
+                        <span class="unit-label">${item.uom || 'pz'}</span>
+                    </div>
+                    <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">${checkboxHtml}</div>
+                </div>`;
             }
 
-            itemDiv.innerHTML = '' +
-                '<div class="item-main">' +
-                    '<div class="item-name-group">' +
-                        '<span class="item-name">' + item.name + '</span>' +
-                        '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">' + systemicBadge + supplierBadge + '</div>' +
-                    '</div>' +
-                    '<div class="item-controls">' +
-                        '<div class="input-group-inline">' +
-                            '<input type="number" class="qty-input" value="' + itemState.n_op + '" placeholder="Qt." onchange="window.updateItemData(\'' + stateKey + '\', \'n_op\', this.value)">' +
-                            '<span class="unit-label">' + (item.unit || 'pz') + '</span>' +
-                        '</div>' +
-                        '<div class="custom-checkbox ' + (itemState.done ? 'checked' : '') + '" onclick="window.toggleDone(\'' + stateKey + '\')">' + checkboxHtml + '</div>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="item-sub" style="margin-top: 8px;">' +
-                    '<input type="text" class="note-input" value="' + (itemState.note || '') + '" placeholder="Aggiungi nota operativa..." onchange="window.updateItemData(\'' + stateKey + '\', \'note\', this.value)">' +
-                '</div>';
+            itemDiv.innerHTML = `
+                <div class="item-main">
+                    <div class="item-name-group">
+                        <span class="item-name">${item.name}</span>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge}</div>
+                    </div>
+                    ${controlsHtml}
+                </div>
+                <div class="item-sub" style="margin-top: 8px;">
+                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota di deficit..." onchange="window.updateItemData('${stateKey}', 'note', this.value)">
+                </div>`;
 
             if (isAdmin) {
                 let pressTimer;
-                itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editItem(sectionId, item.id), 800); };
+                itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = window.setTimeout(() => window.hf_editItemModal(sectionId, item.id), 800); };
                 itemDiv.onmouseup = itemDiv.ontouchend = () => { clearTimeout(pressTimer); };
             }
 
@@ -313,7 +329,7 @@ function renderMainContent() {
             addItemBtn.style.width = 'calc(100% - 32px)';
             addItemBtn.style.border = '1px dashed var(--border)';
             addItemBtn.innerHTML = '<i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO';
-            addItemBtn.onclick = () => window.openItemModal(sectionId);
+            addItemBtn.onclick = () => window.hf_openItemModal(sectionId);
             sectionDiv.appendChild(addItemBtn);
         }
 
@@ -334,7 +350,7 @@ function renderMainContent() {
 
 /**
  * ============================================================================
- * UTILITY CROMATICHE
+ * UTILITY STRUTTURALI CROMATICHE
  * ============================================================================
  */
 function getUniqueCategories(sedeId) {
@@ -343,11 +359,13 @@ function getUniqueCategories(sedeId) {
     const folders = State.appStructure.sedi[sedeId].folders;
     
     Object.values(folders).forEach(folder => {
-        Object.values(folder.sections).forEach(section => {
-            if (!categoriesMap.has(section.name)) {
-                categoriesMap.set(section.name, section.color);
-            }
-        });
+        if (folder.sections) {
+            Object.values(folder.sections).forEach(section => {
+                if (!categoriesMap.has(section.name)) {
+                    categoriesMap.set(section.name, section.color);
+                }
+            });
+        }
     });
     
     return Array.from(categoriesMap, ([name, color]) => ({ name, color }));
