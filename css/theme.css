@@ -1,32 +1,36 @@
-:root {
-    --bg: #0D0907; 
-    --surface: #1A1412; 
-    --surface-hover: #261E1B; 
-    --border: #3D2D24; 
-    --text: #F2E8E4; 
-    --text-muted: #A68A7C; 
-    --accent: #C9A464; 
-    --accent-hover: #E5C385; 
-    --nexus: #9b59b6;
-    --danger: #e74c3c;
+/* File: css/theme.css */
+
+/* --- CONFIGURAZIONE VARIABILI MATRICE: TEMA DARK (PREDEFINITO) --- */
+:root[data-theme="dark"] {
+    --bg: #0D0907;
+    --surface: #140E0A;
+    --border: #261C14;
+    --text-main: #F4F1EA;
+    --text-muted: #8C8275;
+    --accent: #C9A464; /* Oro Brutalista */
+    --accent-hover: #E5C387;
+    
     --success: #2ecc71;
+    --danger: #e74c3c;
+    --nexus: #9b59b6; /* Colore di Controllo Hub */
 }
 
-html, body {
-    width: 100%;
-    min-height: 100vh;
-    min-height: 100dvh;
-    margin: 0;
-    padding: 0;
-    background-color: var(--bg);
-    color: var(--text);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-    overflow-y: hidden; /* Gestito dai wrapper SPA */
+/* --- CONFIGURAZIONE VARIABILI MATRICE: TEMA LIGHT (PERGAMENA) --- */
+:root[data-theme="light"] {
+    --bg: #F4F1EA;
+    --surface: #EAE5D8;
+    --border: #D1C7B2;
+    --text-main: #140E0A;
+    --text-muted: #6B6254;
+    --accent: #8A1C14; /* Rosso Sangue/Ruggine */
+    --accent-hover: #B8251B;
+    
+    --success: #27ae60;
+    --danger: #c0392b;
+    --nexus: #8e44ad;
 }
 
+/* --- REGOLE DI TRANSIZIONE GLOBALE --- */
 * {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
