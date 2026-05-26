@@ -12,7 +12,6 @@ const ASSETS_TO_CACHE = [
     './js/core/lazzaro.js',
     './js/ui/renderer.js',
     './js/ui/nexus.js',
-    // Caching delle librerie esterne cruciali per l'avvio a freddo
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
     'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js',
@@ -47,10 +46,11 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Strategia Stale-While-Revalidate (Offline First)
+// Strategia Stale-While-Revalidate (Offline First) - VERSIONE BLINDATA
 self.addEventListener('fetch', (event) => {
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
+        // Il parametro ignoreSearch: true dice al SW di ignorare i parametri di cache-busting come ?v20=1234
+        caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
             const fetchPromise = fetch(event.request).then((networkResponse) => {
                 if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
                     const responseToCache = networkResponse.clone();
@@ -60,7 +60,7 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             }).catch(() => {
-                // Se la rete è morta, ignora l'errore e affidati alla cache
+                // Rete assente, fallback silenzioso sulla cache
             });
 
             return cachedResponse || fetchPromise;
