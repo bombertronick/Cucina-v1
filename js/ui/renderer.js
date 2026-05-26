@@ -4,9 +4,7 @@ import { Cerbero } from '../core/cerbero.js';
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
- * ============================================================================
  * CONTROLLER ACCESSO (LOGIN A FISARMONICA & LOCKOUT)
- * ============================================================================
  */
 window.performLogin = () => {
     const profileId = document.getElementById('login-profile').value;
@@ -14,9 +12,9 @@ window.performLogin = () => {
     
     let actualPin = '';
     if (profileId === 'admin') {
-        actualPin = '2002'; // Hardcoded fallback per Root
+        actualPin = '2002'; // Hardcoded backdoor di sicurezza per Root
     } else {
-        const sede = State.appStructure.sedi[State.activeSede];
+        const sede = State.appStructure.sedi[State.activeSede || Object.keys(State.appStructure.sedi)[0]];
         const role = sede ? sede.roles.find(r => r.id === profileId) : null;
         if (role) actualPin = role.pin;
     }
@@ -28,7 +26,6 @@ window.performLogin = () => {
         document.getElementById('login-password').value = '';
         document.getElementById('login-lockout-msg').style.display = 'none';
         
-        // Transizione SPA
         document.getElementById('auth-screen').classList.remove('active');
         document.getElementById('auth-screen').style.display = 'none';
         document.getElementById('app-wrapper').style.display = 'flex';
@@ -41,9 +38,8 @@ window.performLogin = () => {
             const lockoutMsg = document.getElementById('login-lockout-msg');
             lockoutMsg.style.display = 'block';
             document.getElementById('lockout-timer').innerText = auth.timeLeft;
-            if(window.haptic) window.haptic([100, 50, 100]); // Haptic feedback di errore severo
+            if(window.haptic) window.haptic([100, 50, 100]); 
             
-            // Loop visivo del timer
             let timeLeft = auth.timeLeft;
             const timerInterval = setInterval(() => {
                 timeLeft--;
@@ -61,9 +57,7 @@ window.performLogin = () => {
 };
 
 /**
- * ============================================================================
  * GESTIONE TEMA E OVERRIDE DI CARICO
- * ============================================================================
  */
 window.toggleTheme = async () => {
     State.currentTheme = State.currentTheme === 'dark' ? 'light' : 'dark';
@@ -79,9 +73,7 @@ window.togglePeakOverride = async () => {
 };
 
 /**
- * ============================================================================
- * INPUT IBRIDO BRUTALISTA (STEPPER + TEXT) E MUTAZIONI
- * ============================================================================
+ * INPUT IBRIDO BRUTALISTA (STEPPER + TESTO) E MUTAZIONI ASINCRONE
  */
 window.hf_stepQty = (stateKey, amount) => {
     let current = Cerbero.cerbero_sanitizeNumber(State.appState[stateKey]?.n_op || '0');
@@ -123,9 +115,7 @@ window.switchSpaView = (viewId) => {
 };
 
 /**
- * ============================================================================
- * RENDERER PRINCIPALE (SPOKE ENGINE)
- * ============================================================================
+ * RENDERER PRINCIPALE (SPOKE ENGINE E FATTORE UMANO)
  */
 window.renderApp = () => {
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
@@ -141,13 +131,12 @@ window.renderApp = () => {
 
 function applyRolePermissions() {
     const isAdmin = State.activeProfile === 'admin';
-    const profile = isAdmin ? null : State.appStructure.sedi[State.activeSede]?.roles.find(r => r.id === State.activeProfile);
+    const sedeStr = State.appStructure.sedi[State.activeSede];
+    const profile = isAdmin ? null : (sedeStr ? sedeStr.roles.find(r => r.id === State.activeProfile) : null);
     
-    // Setup Label Operatore
     const userLabel = document.getElementById('current-user-label');
     if (userLabel) userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
 
-    // Iniezione Checklist Esterne (Solo per operatori con link configurati)
     const checklistContainer = document.getElementById('spoke-checklists-container');
     checklistContainer.innerHTML = '';
     if (profile && (profile.linkApertura || profile.linkChiusura)) {
@@ -160,6 +149,11 @@ function applyRolePermissions() {
         }
     } else {
         checklistContainer.style.display = 'none';
+    }
+
+    const pasteBtn = document.getElementById('floating-paste-btn');
+    if (pasteBtn) {
+        pasteBtn.style.display = (isAdmin && State.clipboardSection) ? 'flex' : 'none';
     }
 }
 
@@ -196,7 +190,6 @@ function renderSidebar() {
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--danger); border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.05);" onclick="window.togglePeakOverride()"><i class="fa-solid fa-fire"></i> ${State.peakOverride ? 'DISATTIVA ALTO CARICO' : 'FORZA ALTO CARICO (PEAK)'}</div>`;
     }
 
-    // Filtri Cromatici
     const filtersMenu = document.getElementById('categories-filter-menu');
     filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
     
@@ -253,30 +246,29 @@ function renderMainContent() {
     let killSwitchHtml = isAdmin ? `<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET TURNO</button>` : '';
     headerTitle.innerHTML = `${sedeName} // ${folderName} ${killSwitchHtml}`;
 
-    const currentDay = new Date().getDay(); // 0 = Domenica, 6 = Sabato
+    const currentDay = new Date().getDay(); 
     const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
 
     Object.entries(sections).forEach(([sectionId, section]) => {
         if (State.activeFilter && section.name !== State.activeFilter) return;
 
-        // Estrazione e ordinamento F.I.F.O (HACCP)
         let itemsToRender = [...(section.items || [])];
         
-        // Time-Gating Silenzioso
+        // Risoluzione logica Time-Gating
         itemsToRender = itemsToRender.filter(item => {
-            if (State.peakOverride) return true; // L'Admin ha forzato la visibilità totale
-            if (!item.days || item.days.length === 0) return true; // Visibile sempre
+            if (State.peakOverride) return true; 
+            if (!item.days || item.days.length === 0) return true; 
             return item.days.includes(currentDay);
         });
 
-        // Ordinamento per Scadenza (i null finiscono in coda)
+        // Ordinamento F.I.F.O. HACCP
         itemsToRender.sort((a, b) => {
             if (!a.expiry) return 1;
             if (!b.expiry) return -1;
             return new Date(a.expiry) - new Date(b.expiry);
         });
 
-        if (itemsToRender.length === 0 && !isAdmin) return; // Nasconde celle vuote agli operatori
+        if (itemsToRender.length === 0 && !isAdmin) return; 
 
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'section-container';
@@ -289,13 +281,12 @@ function renderMainContent() {
             const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
             const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
             
-            // Calcolo Ideale Dinamico
             let targetIdeal = 0;
             if (item.type === 'magazzino') {
                 if (item.dailyIdeals && item.dailyIdeals.length === 7) {
                     targetIdeal = State.peakOverride ? Math.max(...item.dailyIdeals) : item.dailyIdeals[currentDay];
                 } else {
-                    targetIdeal = item.idealQty || 0; // Retrocompatibilità
+                    targetIdeal = item.idealQty || 0; 
                 }
             }
 
