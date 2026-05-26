@@ -12,6 +12,8 @@
     
     <title>Scutum ERP V20 Absolute</title>
     
+    <link rel="manifest" href="manifest.json">
+    
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -25,7 +27,7 @@
     <link rel="stylesheet" href="css/layout.css">
 </head>
 <body>
-    <div id="toast-container"></div>
+    <div id="toast-container" style="position: fixed; z-index: 9999; top: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; pointer-events: none;"></div>
 
     <div id="app-root">
         
@@ -42,8 +44,7 @@
                 </div>
 
                 <div class="input-group">
-                    <input type="password" pattern="[0-9]*" inputmode="numeric" id="login-password" placeholder="PIN ALLA CIECA" 
-                           style="text-align: center; letter-spacing: 8px; font-size: 1.5rem; width: 100%;">
+                    <input type="password" pattern="[0-9]*" inputmode="numeric" id="login-password" placeholder="PIN ALLA CIECA" style="text-align: center; letter-spacing: 8px; font-size: 1.5rem; width: 100%;">
                 </div>
                 
                 <button class="btn-action solid" id="btn-login" onclick="if(window.performLogin) window.performLogin();" style="margin-top: 24px; width: 100%;">
@@ -118,7 +119,6 @@
             </div>
             
             <div id="nexus-actions-container" style="display:flex; gap:12px; margin-bottom:24px;"></div>
-            
             <div id="nexus-content"></div>
         </div>
     </div>
@@ -131,7 +131,6 @@
                 const statusStr = document.getElementById('boot-status');
                 statusStr.innerText = "CARICAMENTO MOTORE V20...";
                 
-                // Iniezione JS Dinamica anti-cache
                 await import('./js/app.js?v20=' + new Date().getTime());
                 
                 statusStr.innerText = "SELEZIONA PROFILO E INSERISCI PIN";
@@ -144,7 +143,6 @@
             }
         }
         
-        // PWA Cleanup per forzare l'aggiornamento
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function(registrations) {
                 for(let registration of registrations) { registration.unregister(); }
