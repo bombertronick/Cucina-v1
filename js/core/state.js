@@ -1,9 +1,7 @@
 // File: js/core/state.js
 
 /**
- * ============================================================================
- * MATRIX STATE ENGINE - REGISTRO UNIFICATO GLOBAL
- * ============================================================================
+ * MATRIX STATE ENGINE - REGISTRO UNIFICATO GLOBALE
  */
 export const State = {
     appStructure: {
@@ -16,6 +14,6 @@ export const State = {
     activeProfile: null,
     activeFilter: null,
     clipboardSection: null,
-    peakOverride: false, // Modalità Alto Carico per forzatura soglie
+    peakOverride: false, 
     currentTheme: 'dark'
 };
