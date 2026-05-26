@@ -341,7 +341,7 @@ function renderMainContent() {
         });
 
         if (isAdmin) {
-            sectionDiv.innerHTML += `<button class="btn-action" style="margin:16px; width:calc(100% - 32px); border:1px dashed var(--border);" onclick="window.hf_openItemModal('${sectionId}')"><i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO</button>`;
+            sectionDiv.innerHTML += `<button class="btn-action" style="margin:16px; width:calc(100% - 32px); border:1px dashed var(--border);" onclick="window.hf_openItemModal('${sectionId}')"><i class="fa-solid fa-plus"></i> AGGIUNGI PROPRODOTTO</button>`;
         }
         content.appendChild(sectionDiv);
     });
