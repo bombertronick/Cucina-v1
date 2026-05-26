@@ -1,7 +1,6 @@
 // File: js/core/lazzaro.js
 import { State } from './state.js';
 
-// Configurazione storage crudo IndexedDB tramite LocalForage
 localforage.config({ name: 'Scutum_ERP_V20', storeName: 'encrypted_cache' });
 
 export const lazzaro_loadState = async () => {
@@ -19,11 +18,10 @@ export const lazzaro_loadState = async () => {
             State.peakOverride = savedConfig.peakOverride || false;
         }
         
-        // Esecuzione silente del Garbage Collector all'avvio del motore
         await lazzaro_garbageCollector();
         return true;
     } catch (e) {
-        console.error("[LAZZARO CRITICAL] Errore nel ripristino della cache locale", e);
+        console.error("[LAZZARO CRITICAL] Errore ripristino cache locale", e);
         return false;
     }
 };
@@ -38,7 +36,7 @@ export const lazzaro_saveState = async () => {
             peakOverride: State.peakOverride
         });
     } catch (e) {
-        console.error("[LAZZARO CRITICAL] Impossibile scrivere su database locale", e);
+        console.error("[LAZZARO CRITICAL] Impossibile scrivere su DB locale", e);
     }
 };
 
@@ -47,9 +45,8 @@ export const lazzaro_stampMutation = (stateKey, field, value) => {
         State.appState[stateKey] = { done: false, n_op: '0', note: '', lastModified: 0 };
     }
     State.appState[stateKey][field] = value;
-    State.appState[stateKey].lastModified = Date.now(); // Soluzione Last Write Wins
+    State.appState[stateKey].lastModified = Date.now(); 
 
-    // Accodamento asincrono per resilienza offline
     const queuePayload = { 
         stateKey, 
         field, 
@@ -74,7 +71,6 @@ export const lazzaro_stampMutation = (stateKey, field, value) => {
 export const lazzaro_processSyncQueue = async () => {
     if (State.syncQueue.length === 0 || !navigator.onLine) return;
     
-    // Micro-Chunking: Isolamento a blocchi di 10 record per preservare i 60fps dell'interfaccia
     const chunk = State.syncQueue.slice(0, 10);
     
     try {
@@ -93,7 +89,6 @@ export const lazzaro_processSyncQueue = async () => {
             
             chunk.forEach(item => {
                 const remoteItem = remoteState[item.stateKey];
-                // Risoluzione conflitti concorrenziali tramite confronto temporale millimetrico
                 if (!remoteItem || item.timestamp > (remoteItem.lastModified || 0)) {
                     if (!remoteState[item.stateKey]) remoteState[item.stateKey] = {};
                     remoteState[item.stateKey][item.field] = item.value;
@@ -107,7 +102,6 @@ export const lazzaro_processSyncQueue = async () => {
                 body: JSON.stringify({ appStructure: State.appStructure, appState: remoteState })
             });
 
-            // Svuotamento controllato della porzione elaborata
             State.syncQueue = State.syncQueue.slice(chunk.length);
             await lazzaro_saveState();
             
@@ -116,13 +110,13 @@ export const lazzaro_processSyncQueue = async () => {
             }
         }
     } catch (err) {
-        console.error("[LAZZARO OFFLINE ALARM] Errore di scaricamento della coda in background", err);
+        console.error("[LAZZARO OFFLINE] Errore svuotamento coda sync", err);
     }
 };
 
 export const lazzaro_garbageCollector = async () => {
     const now = Date.now();
-    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // Conservazione limite per prevenire la saturazione delle cache iOS
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; 
     let keysDeleted = 0;
 
     Object.keys(State.appState).forEach(key => {
@@ -139,9 +133,26 @@ export const lazzaro_garbageCollector = async () => {
 };
 
 /**
- * ============================================================================
- * MACCHINA DEL TEMPO E CONFIGURAZIONI QUANTICHE CLOUD VAULT
- * ============================================================================
+ * DISTRUTTORE DI DATI ORFANI (VAPORIZZAZIONE RECORD FANTASMA)
+ */
+export const lazzaro_purgeGhosts = async (prefix) => {
+    let purged = 0;
+    Object.keys(State.appState).forEach(key => {
+        if (key.startsWith(prefix)) {
+            delete State.appState[key];
+            purged++;
+        }
+    });
+    console.log(`[SYSTEM PURGE] Rimosserò ${purged} record orfani per il prefisso: ${prefix}`);
+    if (purged > 0) {
+        await lazzaro_saveState();
+    }
+};
+
+window.lazzaro_purgeGhosts = lazzaro_purgeGhosts;
+
+/**
+ * BACKUP STRUTTURALI (MACCHINA DEL TEMPO E NODI CLOUD)
  */
 window.exportLocalBackup = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
@@ -193,10 +204,10 @@ window.syncPushCloud = async () => {
             headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey },
             body: JSON.stringify({ appStructure: State.appStructure, appState: State.appState })
         });
-        if (res.ok) window.showToast("PUSH Globale completato con successo.", "success");
+        if (res.ok) window.showToast("PUSH Globale completato.", "success");
         else window.showToast("Rifiuto credenziali Cloud Vault.", "error");
     } catch (err) {
-        window.showToast("Blocco CORS o assenza segnale Cloud.", "error");
+        window.showToast("Blocco CORS o segnale assente.", "error");
     }
 };
 
@@ -220,7 +231,7 @@ window.syncPullCloud = async () => {
                 State.appStructure = data.record.appStructure;
                 State.appState = data.record.appState;
                 await lazzaro_saveState();
-                window.showToast("Allineamento completato. Riavvio in corso...", "success");
+                window.showToast("Allineamento completato. Riavvio...", "success");
                 setTimeout(() => window.location.reload(), 1000);
             }
         } else {
