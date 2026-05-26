@@ -293,6 +293,7 @@ window.lazzaro_saveItem = async () => {
 
 window.lazzaro_deleteItem = async () => {
     if (!confirm("Eliminare definitivamente la referenza dalla matrice logistica?")) return;
+    window.lazzaro_purgeGhosts(State.activeSede + '_' + State.activeFolder + '_' + window._editContext.sectionId + '_' + window._editContext.itemId);
     const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.sectionId];
     section.items = section.items.filter(i => i.id !== window._editContext.itemId);
     window.closeModals(); window.renderApp(); await lazzaro_saveState();
@@ -319,8 +320,8 @@ function injectOperatorModals() {
             <h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA OPERATORE</h2>
             <div class="input-group"><label>Nome Visualizzato</label><input type="text" id="input-op-name" placeholder="Es. Mario Rossi"></div>
             <div class="input-group"><label>PIN di Accesso (Solo Numeri)</label><input type="number" pattern="[0-9]*" inputmode="numeric" id="input-op-pin" placeholder="Es. 1234"></div>
-            <div class="input-group"><label>URL Checklist Apertura (Google Forms / App)</label><input type="url" id="input-op-apertura" placeholder="https://..."></div>
-            <div class="input-group"><label>URL Checklist Chiusura (Google Forms / App)</label><input type="url" id="input-op-chiusura" placeholder="https://..."></div>
+            <div class="input-group"><label>URL Checklist Apertura</label><input type="url" id="input-op-apertura" placeholder="https://..."></div>
+            <div class="input-group"><label>URL Checklist Chiusura</label><input type="url" id="input-op-chiusura" placeholder="https://..."></div>
             <div style="display: flex; gap: 16px; margin-top: auto;">
                 <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
                 <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-op" onclick="window.deleteOperatorLogic()"><i class="fa-solid fa-trash"></i> RIMUOVI</button>
@@ -428,20 +429,56 @@ function injectStructuralModals() {
     }
 }
 
-// === SEDI ===
 window.openSedeModal = () => { injectStructuralModals(); window._editContext = { type: 'sede', isNew: true }; document.getElementById('sede-modal-title').innerText = 'NUOVA RETE LOGISTICA'; document.getElementById('input-sede-name').value = ''; document.getElementById('btn-delete-sede').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-sede').style.display = 'flex'; };
 window.editSede = (sedeId) => { injectStructuralModals(); window._editContext = { type: 'sede', id: sedeId, isNew: false }; document.getElementById('sede-modal-title').innerText = 'MODIFICA RETE LOGISTICA'; document.getElementById('input-sede-name').value = State.appStructure.sedi[sedeId].name; document.getElementById('btn-delete-sede').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-sede').style.display = 'flex'; };
 window.saveSedeLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-sede-name').value); if (!name) return; if (!window._editContext.isNew) { State.appStructure.sedi[window._editContext.id].name = name; } else { const newId = 'sede_' + Date.now(); State.appStructure.sedi[newId] = { name: name, roles: [], folders: {} }; State.activeSede = newId; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
-window.deleteSedeLogic = async () => { if (!confirm("ATTENZIONE: Eliminando la Sede perderai TUTTI i dati. Procedere?")) return; delete State.appStructure.sedi[window._editContext.id]; if (State.activeSede === window._editContext.id) { State.activeSede = Object.keys(State.appStructure.sedi)[0] || null; State.activeFolder = State.activeSede ? (Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null) : null; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+window.deleteSedeLogic = async () => { if (!confirm("ATTENZIONE: Eliminando la Sede perderai TUTTI i dati. Procedere?")) return; window.lazzaro_purgeGhosts(window._editContext.id + '_'); delete State.appStructure.sedi[window._editContext.id]; if (State.activeSede === window._editContext.id) { State.activeSede = Object.keys(State.appStructure.sedi)[0] || null; State.activeFolder = State.activeSede ? (Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null) : null; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
 
-// === TURNI ===
 window.openFolderModal = () => { injectStructuralModals(); window._editContext = { type: 'folder', isNew: true }; document.getElementById('folder-modal-title').innerText = 'NUOVO TURNO OPERATIVO'; document.getElementById('input-folder-name').value = ''; document.getElementById('btn-delete-folder').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-folder').style.display = 'flex'; };
 window.editFolder = (folderId) => { injectStructuralModals(); window._editContext = { type: 'folder', id: folderId, isNew: false }; document.getElementById('folder-modal-title').innerText = 'MODIFICA TURNO'; document.getElementById('input-folder-name').value = State.appStructure.sedi[State.activeSede].folders[folderId].name; document.getElementById('btn-delete-folder').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-folder').style.display = 'flex'; };
 window.saveFolderLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-folder-name').value); if (!name || !State.activeSede) return; if (!window._editContext.isNew) { State.appStructure.sedi[State.activeSede].folders[window._editContext.id].name = name; } else { const newId = 'fold_' + Date.now(); State.appStructure.sedi[State.activeSede].folders[newId] = { name: name, sections: {} }; State.activeFolder = newId; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
-window.deleteFolderLogic = async () => { if (!confirm("Vuoi eliminare questo Turno e tutte le sue celle?")) return; delete State.appStructure.sedi[State.activeSede].folders[window._editContext.id]; if (State.activeFolder === window._editContext.id) State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+window.deleteFolderLogic = async () => { if (!confirm("Vuoi eliminare questo Turno e tutte le sue celle?")) return; window.lazzaro_purgeGhosts(State.activeSede + '_' + window._editContext.id + '_'); delete State.appStructure.sedi[State.activeSede].folders[window._editContext.id]; if (State.activeFolder === window._editContext.id) State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
 
-// === CELLE ===
 window.openSectionModal = () => { injectStructuralModals(); window._editContext = { type: 'section', isNew: true }; document.getElementById('section-modal-title').innerText = 'NUOVA CELLA LOGICA'; document.getElementById('input-section-name').value = ''; document.getElementById('btn-delete-section').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
 window.editSection = (sectionId) => { injectStructuralModals(); window._editContext = { type: 'section', id: sectionId, isNew: false }; document.getElementById('section-modal-title').innerText = 'MODIFICA CELLA LOGICA'; const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId]; document.getElementById('input-section-name').value = sec.name; document.getElementById('input-section-color').value = sec.color; document.getElementById('btn-delete-section').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
 window.saveSectionLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-section-name').value); const color = document.getElementById('input-section-color').value; if (!name || !State.activeSede || !State.activeFolder) return; if (!window._editContext.isNew) { const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; sec.name = name; sec.color = color; } else { const newId = 'sec_' + Date.now(); State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[newId] = { name: name, color: color, items: [] }; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
-window.deleteSectionLogic = async () => { if (!confirm("Vuoi eliminare questa Cella Logica e tutti i prodotti al suo interno?")) return; delete State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+window.deleteSectionLogic = async () => { if (!confirm("Vuoi eliminare questa Cella Logica e tutti i prodotti al suo interno?")) return; window.lazzaro_purgeGhosts(State.activeSede + '_' + State.activeFolder + '_' + window._editContext.id + '_'); delete State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+
+/**
+ * CONTAINER CLOUD MODAL (BYPASS QUANTICO)
+ */
+window.openCloudModal = () => {
+    if (document.getElementById('modal-cloud-vault')) {
+        document.getElementById('modal-layer').style.display = 'flex';
+        document.getElementById('modal-cloud-vault').style.display = 'flex';
+        return;
+    }
+    const html = `
+    <div id="modal-cloud-vault" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+        <div class="modal-box">
+            <h2 style="margin-bottom: 20px; color: var(--nexus); font-weight:800;"><i class="fa-solid fa-cloud-arrow-up"></i> CLOUD VAULT (JSONBin)</h2>
+            <div class="input-group"><label>Master API Key</label><input type="password" id="input-cloud-key"></div>
+            <div class="input-group"><label>Bin ID Corrente</label><input type="text" id="input-cloud-bin"></div>
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                <button class="btn-action" style="border-color:var(--success); color:var(--success);" onclick="window.syncPullCloud()"><i class="fa-solid fa-cloud-arrow-down"></i> PULL GLOBAL</button>
+                <button class="btn-action solid" style="background:var(--nexus);" onclick="window.syncPushCloud()"><i class="fa-solid fa-cloud-arrow-up"></i> PUSH STRUCTURE</button>
+            </div>
+            <div style="border-top:1px dashed var(--border); padding-top:16px; margin-bottom:16px;">
+                <div style="font-weight:800; color:var(--accent); font-size:0.75rem; margin-bottom:8px;">MACCHINA DEL TEMPO (LOCAL SNAPSHOT)</div>
+                <div style="display:flex; gap:12px;">
+                    <button class="btn-action" onclick="window.exportLocalBackup()"><i class="fa-solid fa-file-export"></i> EXPORT JSON</button>
+                    <button class="btn-action" onclick="document.getElementById('time-file-input').click()"><i class="fa-solid fa-file-import"></i> IMPORT JSON</button>
+                    <input type="file" id="time-file-input" style="display:none;" accept=".json" onchange="window.importLocalBackup(event)">
+                </div>
+            </div>
+            <button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO</button>
+        </div>
+    </div>`;
+    document.getElementById('modal-layer').insertAdjacentHTML('beforeend', html);
+    
+    document.getElementById('input-cloud-key').value = localStorage.getItem('nexus_api_key') || '';
+    document.getElementById('input-cloud-bin').value = localStorage.getItem('nexus_bin_id') || '';
+    
+    document.getElementById('modal-layer').style.display = 'flex';
+    document.getElementById('modal-cloud-vault').style.display = 'flex';
+};
