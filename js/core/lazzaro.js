@@ -1,180 +1,237 @@
 // File: js/core/lazzaro.js
 import { State } from './state.js';
-import { CloudVault } from './cloud.js';
 
-/**
- * ============================================================================
- * PROTOCOLLO LAZZARO V15.8 (Persistenza, Cloud Integration e Fault Tolerance)
- * ============================================================================
- */
-let store = null;
+// Configurazione storage crudo IndexedDB tramite LocalForage
+localforage.config({ name: 'Scutum_ERP_V20', storeName: 'encrypted_cache' });
 
-// Istanziazione ritardata per prevenire crash asincroni
-function getStore() {
-    if (!store) {
-        store = localforage.createInstance({
-            name: "ScutumERP_Absolute_V15_8",
-            storeName: "matrice_logistica"
+export const lazzaro_loadState = async () => {
+    try {
+        const savedStructure = await localforage.getItem('appStructure');
+        const savedState = await localforage.getItem('appState');
+        const savedConfig = await localforage.getItem('appConfig');
+        const savedQueue = await localforage.getItem('syncQueue');
+
+        if (savedStructure) State.appStructure = savedStructure;
+        if (savedState) State.appState = savedState;
+        if (savedQueue) State.syncQueue = savedQueue;
+        if (savedConfig) {
+            State.currentTheme = savedConfig.currentTheme || 'dark';
+            State.peakOverride = savedConfig.peakOverride || false;
+        }
+        
+        // Esecuzione silente del Garbage Collector all'avvio del motore
+        await lazzaro_garbageCollector();
+        return true;
+    } catch (e) {
+        console.error("[LAZZARO CRITICAL] Errore nel ripristino della cache locale", e);
+        return false;
+    }
+};
+
+export const lazzaro_saveState = async () => {
+    try {
+        await localforage.setItem('appStructure', State.appStructure);
+        await localforage.setItem('appState', State.appState);
+        await localforage.setItem('syncQueue', State.syncQueue);
+        await localforage.setItem('appConfig', {
+            currentTheme: State.currentTheme,
+            peakOverride: State.peakOverride
         });
-    }
-    return store;
-}
-
-export async function initDatabase() {
-    try {
-        const db = getStore();
-        const savedStruct = await db.getItem('appStructure');
-        const savedState = await db.getItem('appState');
-
-        if (savedStruct) {
-            State.appStructure = savedStruct;
-            console.info("[Lazzaro] Struttura locale V15.8 caricata con successo.");
-        } else {
-            await recoverLegacyData();
-        }
-
-        if (savedState) {
-            State.appState = savedState;
-            console.info("[Lazzaro] Stato operativo locale ripristinato.");
-        }
-
-        if (CloudVault.isConfigured()) {
-            console.info("[Lazzaro] Rilevato Cloud configurato. Avvio allineamento dati...");
-            await syncPullCloud().catch(err => {
-                console.warn("[Lazzaro - Boot Offline] Cloud non raggiungibile all'avvio. Utilizzo dati locali:", err.message);
-            });
-        }
     } catch (e) {
-        console.error("[Lazzaro] ERRORE CRITICO INIZIALIZZAZIONE DATABASE:", e);
-        State.appStructure = { sedi: {} };
-        State.appState = {};
+        console.error("[LAZZARO CRITICAL] Impossibile scrivere su database locale", e);
     }
-}
+};
 
-export async function saveState() {
-    try {
-        const db = getStore();
-        await db.setItem('appStructure', State.appStructure);
-        await db.setItem('appState', State.appState);
-
-        if (CloudVault.isConfigured()) {
-            syncPushCloud().catch(error => {
-                console.warn("[Lazzaro - Cloud Sync Interrupted] Modalità offline attiva:", error.message);
-            });
-        }
-    } catch (e) {
-        console.error("[Lazzaro] Fallimento critico durante il salvataggio locale:", e);
+export const lazzaro_stampMutation = (stateKey, field, value) => {
+    if (!State.appState[stateKey]) {
+        State.appState[stateKey] = { done: false, n_op: '0', note: '', lastModified: 0 };
     }
-}
+    State.appState[stateKey][field] = value;
+    State.appState[stateKey].lastModified = Date.now(); // Soluzione Last Write Wins
 
-export async function syncPullCloud() {
-    try {
-        const cloudRecord = await CloudVault.pull();
-        if (cloudRecord && cloudRecord.appStructure && cloudRecord.appState) {
-            State.appStructure = cloudRecord.appStructure;
-            State.appState = cloudRecord.appState;
-            
-            const db = getStore();
-            await db.setItem('appStructure', State.appStructure);
-            await db.setItem('appState', State.appState);
-            
-            console.info("[Lazzaro] Allineamento Cloud completato.");
-            if (window.renderApp) window.renderApp();
-        } else {
-            console.warn("[Lazzaro] Il record Cloud scaricato non è valido.");
-        }
-    } catch (error) {
-        console.error("[Lazzaro] Errore PULL logico:", error.message);
-        throw error;
-    }
-}
-
-export async function syncPushCloud() {
-    const payload = {
-        appStructure: State.appStructure,
-        appState: State.appState,
-        lastSyncStamp: Date.now()
+    // Accodamento asincrono per resilienza offline
+    const queuePayload = { 
+        stateKey, 
+        field, 
+        value, 
+        timestamp: State.appState[stateKey].lastModified 
     };
-    await CloudVault.push(payload);
-    console.info("[Lazzaro] Snapshot inviato al Cloud Vault.");
-}
+    
+    const existingIdx = State.syncQueue.findIndex(q => q.stateKey === stateKey && q.field === field);
+    if (existingIdx !== -1) {
+        State.syncQueue[existingIdx] = queuePayload;
+    } else {
+        State.syncQueue.push(queuePayload);
+    }
+    
+    lazzaro_saveState();
+    
+    if (navigator.onLine) {
+        lazzaro_processSyncQueue();
+    }
+};
 
-async function recoverLegacyData() {
-    console.warn("[Lazzaro] Ricerca database legacy in corso...");
-    const legacyKeys = ['cucina_v13_struct', 'nexus_struct', 'scutum_v15_struct'];
-    let legacyFound = false;
+export const lazzaro_processSyncQueue = async () => {
+    if (State.syncQueue.length === 0 || !navigator.onLine) return;
+    
+    // Micro-Chunking: Isolamento a blocchi di 10 record per preservare i 60fps dell'interfaccia
+    const chunk = State.syncQueue.slice(0, 10);
+    
+    try {
+        const binId = localStorage.getItem('nexus_bin_id');
+        const apiKey = localStorage.getItem('nexus_api_key');
+        if (!binId || !apiKey) return;
 
-    for (let key of legacyKeys) {
-        const oldData = localStorage.getItem(key);
-        if (oldData) {
-            try {
-                const parsedData = JSON.parse(oldData);
-                State.appStructure = parsedData;
-                legacyFound = true;
-                console.info(`[Lazzaro] Convertito database legacy da: ${key}`);
-                await getStore().setItem('appStructure', State.appStructure);
-                break;
-            } catch (e) {
-                console.error(`[Lazzaro] Dati corrotti nella chiave ${key}.`);
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+            method: 'GET',
+            headers: { 'X-Master-Key': apiKey }
+        });
+        
+        if (response.ok) {
+            const cloudData = await response.json();
+            const remoteState = cloudData.record.appState || {};
+            
+            chunk.forEach(item => {
+                const remoteItem = remoteState[item.stateKey];
+                // Risoluzione conflitti concorrenziali tramite confronto temporale millimetrico
+                if (!remoteItem || item.timestamp > (remoteItem.lastModified || 0)) {
+                    if (!remoteState[item.stateKey]) remoteState[item.stateKey] = {};
+                    remoteState[item.stateKey][item.field] = item.value;
+                    remoteState[item.stateKey].lastModified = item.timestamp;
+                }
+            });
+
+            await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey },
+                body: JSON.stringify({ appStructure: State.appStructure, appState: remoteState })
+            });
+
+            // Svuotamento controllato della porzione elaborata
+            State.syncQueue = State.syncQueue.slice(chunk.length);
+            await lazzaro_saveState();
+            
+            if (State.syncQueue.length > 0) {
+                setTimeout(lazzaro_processSyncQueue, 100);
             }
         }
+    } catch (err) {
+        console.error("[LAZZARO OFFLINE ALARM] Errore di scaricamento della coda in background", err);
     }
+};
 
-    if (!legacyFound) {
-        console.info("[Lazzaro] Generazione matrice vergine.");
-        State.appStructure = { sedi: {} };
+export const lazzaro_garbageCollector = async () => {
+    const now = Date.now();
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // Conservazione limite per prevenire la saturazione delle cache iOS
+    let keysDeleted = 0;
+
+    Object.keys(State.appState).forEach(key => {
+        const record = State.appState[key];
+        if (record && record.lastModified && (now - record.lastModified > SEVEN_DAYS_MS)) {
+            delete State.appState[key];
+            keysDeleted++;
+        }
+    });
+
+    if (keysDeleted > 0) {
+        await lazzaro_saveState();
     }
-}
+};
 
 /**
  * ============================================================================
- * LEGACY BRIDGE (Backup Fisico JSON - Import/Export)
+ * MACCHINA DEL TEMPO E CONFIGURAZIONI QUANTICHE CLOUD VAULT
  * ============================================================================
  */
-export async function exportLocalBackup() {
-    const payload = {
+window.exportLocalBackup = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
         appStructure: State.appStructure,
-        appState: State.appState,
-        timestamp: new Date().toISOString(),
-        version: "15.8"
-    };
-    
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Scutum_Backup_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
-    document.body.appendChild(a);
-    a.click();
-    
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    console.info("[Legacy Bridge] Backup fisico generato e scaricato.");
-}
+        appState: State.appState
+    }));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `SCUTUM_SNAP_${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    if (window.showToast) window.showToast("Snapshot temporale scaricato.", "success");
+};
 
-export async function importLocalBackup(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = async (e) => {
-            try {
-                const parsed = JSON.parse(e.target.result);
-                if (!parsed.appStructure) throw new Error("File JSON incompatibile con Scutum ERP.");
-                
+window.importLocalBackup = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            if (parsed.appStructure && parsed.appState) {
                 State.appStructure = parsed.appStructure;
-                if (parsed.appState) State.appState = parsed.appState;
-                
-                await saveState(); 
-                console.info("[Legacy Bridge] Matrice sovrascritta con successo dal backup fisico.");
-                resolve(true);
-            } catch (error) {
-                console.error("[Legacy Bridge] Corruzione dati durante l'importazione:", error);
-                reject(error);
+                State.appState = parsed.appState;
+                await lazzaro_saveState();
+                if (window.showToast) window.showToast("Linea temporale ripristinata. Riavvio...", "success");
+                setTimeout(() => window.location.reload(), 1200);
             }
-        };
-        
-        reader.onerror = () => reject(new Error("Impossibile leggere il file dal dispositivo."));
-        reader.readAsText(file);
-    });
-}
+        } catch (err) {
+            if (window.showToast) window.showToast("File di backup corrotto.", "error");
+        }
+    };
+    reader.readAsText(file);
+};
+
+window.syncPushCloud = async () => {
+    const binId = document.getElementById('input-cloud-bin').value.trim();
+    const apiKey = document.getElementById('input-cloud-key').value.trim();
+    if (!binId || !apiKey) return window.showToast("Parametri Cloud assenti.", "error");
+
+    localStorage.setItem('nexus_bin_id', binId);
+    localStorage.setItem('nexus_api_key', apiKey);
+
+    try {
+        if (window.showToast) window.showToast("Sincronizzazione forzata in corso...", "info");
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey },
+            body: JSON.stringify({ appStructure: State.appStructure, appState: State.appState })
+        });
+        if (res.ok) window.showToast("PUSH Globale completato con successo.", "success");
+        else window.showToast("Rifiuto credenziali Cloud Vault.", "error");
+    } catch (err) {
+        window.showToast("Blocco CORS o assenza segnale Cloud.", "error");
+    }
+};
+
+window.syncPullCloud = async () => {
+    const binId = document.getElementById('input-cloud-bin').value.trim();
+    const apiKey = document.getElementById('input-cloud-key').value.trim();
+    if (!binId || !apiKey) return window.showToast("Parametri Cloud assenti.", "error");
+
+    localStorage.setItem('nexus_bin_id', binId);
+    localStorage.setItem('nexus_api_key', apiKey);
+
+    try {
+        if (window.showToast) window.showToast("Estrazione dati alveare...", "info");
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+            method: 'GET',
+            headers: { 'X-Master-Key': apiKey }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.record.appStructure && data.record.appState) {
+                State.appStructure = data.record.appStructure;
+                State.appState = data.record.appState;
+                await lazzaro_saveState();
+                window.showToast("Allineamento completato. Riavvio in corso...", "success");
+                setTimeout(() => window.location.reload(), 1000);
+            }
+        } else {
+            window.showToast("Impossibile decodificare il bin remoto.", "error");
+        }
+    } catch (err) {
+        window.showToast("Errore di rete nell'estrazione Pull.", "error");
+    }
+};
+
+window.addEventListener('online', () => {
+    if (window.showToast) window.showToast("Segnale ripristinato. Svuotamento coda sync...", "success");
+    lazzaro_processSyncQueue();
+});
