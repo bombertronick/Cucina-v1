@@ -2,23 +2,20 @@
 
 /**
  * ============================================================================
- * STATE MANAGER (Memoria Volatile Centrale)
+ * MATRIX STATE ENGINE - REGISTRO UNIFICATO GLOBAL
  * ============================================================================
- * L'unico punto di verità dell'applicazione. Tutte le modifiche vengono
- * apportate qui e poi congelate nel database da Lazzaro.
  */
 export const State = {
-    activeProfile: null,     // 'admin' o ID operatore base
-    activeSede: null,        // ID della Sede selezionata
-    activeFolder: null,      // ID del Turno selezionato
-    activeFilter: null,      // Categoria Croma attualmente filtrata
-    clipboardSection: null,  // Appunti per il Copia-Incolla delle Celle Logiche
-    
-    // Struttura Architetturale (Sedi, Turni, Sezioni, Prodotti)
     appStructure: {
         sedi: {}
     },
-    
-    // Stato Operativo (Quantità, Spunte, Note) - Chiave: sedeId_folderId_sectionId_itemId
-    appState: {}
+    appState: {},
+    syncQueue: [],
+    activeSede: null,
+    activeFolder: null,
+    activeProfile: null,
+    activeFilter: null,
+    clipboardSection: null,
+    peakOverride: false, // Modalità Alto Carico per forzatura soglie
+    currentTheme: 'dark'
 };
