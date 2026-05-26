@@ -74,21 +74,29 @@ export const lazzaro_processSyncQueue = async () => {
     const chunk = State.syncQueue.slice(0, 10);
     
     try {
-        const binId = localStorage.getItem('nexus_bin_id');
-        const apiKey = localStorage.getItem('nexus_api_key');
-        if (!binId || !apiKey) return;
+        const gistId = localStorage.getItem('nexus_bin_id');
+        const token = localStorage.getItem('nexus_api_key');
+        if (!gistId || !token) return;
 
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+        // Estrazione dati dall'alveare GitHub Gist
+        const response = await fetch(`https://api.github.com/gists/${gistId}`, {
             method: 'GET',
-            headers: { 'X-Master-Key': apiKey }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+            }
         });
         
         if (response.ok) {
             const cloudData = await response.json();
-            const remoteState = cloudData.record.appState || {};
+            // Controllo file nella struttura Gist
+            if(!cloudData.files['scutum_matrix.json']) return;
+            const remoteMatrix = JSON.parse(cloudData.files['scutum_matrix.json'].content);
+            const remoteState = remoteMatrix.appState || {};
             
             chunk.forEach(item => {
                 const remoteItem = remoteState[item.stateKey];
+                // LWW: Sovrascrivi solo se il timestamp locale è più recente del cloud
                 if (!remoteItem || item.timestamp > (remoteItem.lastModified || 0)) {
                     if (!remoteState[item.stateKey]) remoteState[item.stateKey] = {};
                     remoteState[item.stateKey][item.field] = item.value;
@@ -96,10 +104,16 @@ export const lazzaro_processSyncQueue = async () => {
                 }
             });
 
-            await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey },
-                body: JSON.stringify({ appStructure: State.appStructure, appState: remoteState })
+            // Scrittura Chunk validato su GitHub
+            const payloadContent = JSON.stringify({ appStructure: State.appStructure, appState: remoteState });
+            await fetch(`https://api.github.com/gists/${gistId}`, {
+                method: 'PATCH',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ files: { "scutum_matrix.json": { content: payloadContent } } })
             });
 
             State.syncQueue = State.syncQueue.slice(chunk.length);
@@ -110,7 +124,7 @@ export const lazzaro_processSyncQueue = async () => {
             }
         }
     } catch (err) {
-        console.error("[LAZZARO OFFLINE] Errore svuotamento coda sync", err);
+        console.error("[LAZZARO OFFLINE] Errore di rete nella sincronizzazione background con GitHub.", err);
     }
 };
 
@@ -132,9 +146,6 @@ export const lazzaro_garbageCollector = async () => {
     }
 };
 
-/**
- * DISTRUTTORE DI DATI ORFANI (VAPORIZZAZIONE RECORD FANTASMA)
- */
 export const lazzaro_purgeGhosts = async (prefix) => {
     let purged = 0;
     Object.keys(State.appState).forEach(key => {
@@ -152,7 +163,7 @@ export const lazzaro_purgeGhosts = async (prefix) => {
 window.lazzaro_purgeGhosts = lazzaro_purgeGhosts;
 
 /**
- * BACKUP STRUTTURALI (MACCHINA DEL TEMPO E NODI CLOUD)
+ * GITHUB VAULT E MACCHINA DEL TEMPO LOCALE
  */
 window.exportLocalBackup = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
@@ -190,59 +201,76 @@ window.importLocalBackup = (event) => {
 };
 
 window.syncPushCloud = async () => {
-    const binId = document.getElementById('input-cloud-bin').value.trim();
-    const apiKey = document.getElementById('input-cloud-key').value.trim();
-    if (!binId || !apiKey) return window.showToast("Parametri Cloud assenti.", "error");
+    const gistId = document.getElementById('input-cloud-bin').value.trim();
+    const token = document.getElementById('input-cloud-key').value.trim();
+    if (!gistId || !token) return window.showToast("Parametri GitHub assenti.", "error");
 
-    localStorage.setItem('nexus_bin_id', binId);
-    localStorage.setItem('nexus_api_key', apiKey);
+    localStorage.setItem('nexus_bin_id', gistId);
+    localStorage.setItem('nexus_api_key', token);
 
     try {
-        if (window.showToast) window.showToast("Sincronizzazione forzata in corso...", "info");
-        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey },
-            body: JSON.stringify({ appStructure: State.appStructure, appState: State.appState })
+        if (window.showToast) window.showToast("PUSH Globale verso GitHub in corso...", "info");
+        
+        const payloadContent = JSON.stringify({ appStructure: State.appStructure, appState: State.appState });
+        
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+            method: 'PATCH',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ files: { "scutum_matrix.json": { content: payloadContent } } })
         });
-        if (res.ok) window.showToast("PUSH Globale completato.", "success");
-        else window.showToast("Rifiuto credenziali Cloud Vault.", "error");
+        
+        if (res.ok) window.showToast("Matrice Globale sincronizzata su GitHub Gist.", "success");
+        else window.showToast("Rifiuto credenziali. Token non valido o Gist errato.", "error");
     } catch (err) {
-        window.showToast("Blocco CORS o segnale assente.", "error");
+        window.showToast("Nessun segnale verso i server GitHub.", "error");
     }
 };
 
 window.syncPullCloud = async () => {
-    const binId = document.getElementById('input-cloud-bin').value.trim();
-    const apiKey = document.getElementById('input-cloud-key').value.trim();
-    if (!binId || !apiKey) return window.showToast("Parametri Cloud assenti.", "error");
+    const gistId = document.getElementById('input-cloud-bin').value.trim();
+    const token = document.getElementById('input-cloud-key').value.trim();
+    if (!gistId || !token) return window.showToast("Parametri GitHub assenti.", "error");
 
-    localStorage.setItem('nexus_bin_id', binId);
-    localStorage.setItem('nexus_api_key', apiKey);
+    localStorage.setItem('nexus_bin_id', gistId);
+    localStorage.setItem('nexus_api_key', token);
 
     try {
-        if (window.showToast) window.showToast("Estrazione dati alveare...", "info");
-        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+        if (window.showToast) window.showToast("Estrazione dati da GitHub Vault...", "info");
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
             method: 'GET',
-            headers: { 'X-Master-Key': apiKey }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+            }
         });
+        
         if (res.ok) {
             const data = await res.json();
-            if (data.record.appStructure && data.record.appState) {
-                State.appStructure = data.record.appStructure;
-                State.appState = data.record.appState;
+            if (!data.files || !data.files['scutum_matrix.json']) throw new Error("File matrix mancante nel Gist.");
+            
+            const remoteMatrix = JSON.parse(data.files['scutum_matrix.json'].content);
+            
+            if (remoteMatrix.appStructure && remoteMatrix.appState) {
+                State.appStructure = remoteMatrix.appStructure;
+                State.appState = remoteMatrix.appState;
                 await lazzaro_saveState();
                 window.showToast("Allineamento completato. Riavvio...", "success");
                 setTimeout(() => window.location.reload(), 1000);
             }
         } else {
-            window.showToast("Impossibile decodificare il bin remoto.", "error");
+            window.showToast("Impossibile contattare il Gist remoto.", "error");
         }
     } catch (err) {
-        window.showToast("Errore di rete nell'estrazione Pull.", "error");
+        console.error(err);
+        window.showToast("Errore durante il parsing del Vault GitHub.", "error");
     }
 };
 
 window.addEventListener('online', () => {
-    if (window.showToast) window.showToast("Segnale ripristinato. Svuotamento coda sync...", "success");
+    if (window.showToast) window.showToast("Segnale ripristinato. Svuotamento coda sync verso GitHub...", "success");
     lazzaro_processSyncQueue();
 });
