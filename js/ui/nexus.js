@@ -1,361 +1,447 @@
-// File: js/ui/renderer.js
+// File: js/ui/nexus.js
 import { State } from '../core/state.js';
-import { Cerbero } from '../core/cerbero.js';
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
+import { Cerbero } from '../core/cerbero.js';
+
+window.closeModals = () => { document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); };
+window.hf_closeModals = window.closeModals;
 
 /**
  * ============================================================================
- * CONTROLLER ACCESSO (LOGIN A FISARMONICA & LOCKOUT)
+ * 1. HUB CENTRALIZZATO NEXUS (VISTA CUOCHI E CALCOLO OMNI-REPARTO)
  * ============================================================================
  */
-window.performLogin = () => {
-    const profileId = document.getElementById('login-profile').value;
-    const pinInput = document.getElementById('login-password').value;
+window.hf_renderNexusHub = () => {
+    const content = document.getElementById('nexus-content');
+    const actionsContainer = document.getElementById('nexus-actions-container');
+    if (!content || !actionsContainer) return;
     
-    let actualPin = '';
-    if (profileId === 'admin') {
-        actualPin = '2002'; // Hardcoded fallback per Root
-    } else {
-        const sede = State.appStructure.sedi[State.activeSede];
-        const role = sede ? sede.roles.find(r => r.id === profileId) : null;
-        if (role) actualPin = role.pin;
-    }
-
-    const auth = Cerbero.cerbero_validatePin(profileId, pinInput, actualPin);
-
-    if (auth.success) {
-        State.activeProfile = profileId;
-        document.getElementById('login-password').value = '';
-        document.getElementById('login-lockout-msg').style.display = 'none';
-        
-        // Transizione SPA
-        document.getElementById('auth-screen').classList.remove('active');
-        document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('app-wrapper').style.display = 'flex';
-        document.getElementById('app-wrapper').classList.add('active');
-        
-        window.renderApp();
-    } else {
-        document.getElementById('login-password').value = '';
-        if (auth.reason === 'LOCKOUT_TRIGGERED' || auth.reason === 'LOCKED') {
-            const lockoutMsg = document.getElementById('login-lockout-msg');
-            lockoutMsg.style.display = 'block';
-            document.getElementById('lockout-timer').innerText = auth.timeLeft;
-            if(window.haptic) window.haptic([100, 50, 100]); // Haptic feedback di errore severo
-            
-            // Loop visivo del timer
-            let timeLeft = auth.timeLeft;
-            const timerInterval = setInterval(() => {
-                timeLeft--;
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    lockoutMsg.style.display = 'none';
-                } else {
-                    document.getElementById('lockout-timer').innerText = timeLeft;
-                }
-            }, 1000);
-        } else {
-            if(window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
-        }
-    }
-};
-
-/**
- * ============================================================================
- * GESTIONE TEMA E OVERRIDE DI CARICO
- * ============================================================================
- */
-window.toggleTheme = async () => {
-    State.currentTheme = State.currentTheme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', State.currentTheme);
-    await lazzaro_saveState();
-};
-
-window.togglePeakOverride = async () => {
-    State.peakOverride = !State.peakOverride;
-    await lazzaro_saveState();
-    window.renderApp();
-    if(window.showToast) window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
-};
-
-/**
- * ============================================================================
- * INPUT IBRIDO BRUTALISTA (STEPPER + TEXT) E MUTAZIONI
- * ============================================================================
- */
-window.hf_stepQty = (stateKey, amount) => {
-    let current = Cerbero.cerbero_sanitizeNumber(State.appState[stateKey]?.n_op || '0');
-    current += amount;
-    if (current < 0) current = 0;
-    lazzaro_stampMutation(stateKey, 'n_op', current.toString());
-    window.renderApp();
-    if (window.haptic) window.haptic(15);
-};
-
-window.hf_updateQty = (stateKey, value) => {
-    const cleanValue = Cerbero.cerbero_sanitizeNumber(value);
-    lazzaro_stampMutation(stateKey, 'n_op', cleanValue.toString());
-    window.renderApp();
-};
-
-window.hf_updateNote = (stateKey, value) => {
-    const cleanNote = Cerbero.cerbero_sanitizeText(value);
-    lazzaro_stampMutation(stateKey, 'note', cleanNote);
-};
-
-window.toggleDone = (stateKey) => {
-    const currentState = State.appState[stateKey]?.done || false;
-    lazzaro_stampMutation(stateKey, 'done', !currentState);
-    window.renderApp();
-    if (window.haptic) window.haptic(20);
-};
-
-window.switchSpaView = (viewId) => {
-    document.querySelectorAll('.spa-view').forEach(v => {
-        v.style.display = 'none';
-        v.classList.remove('active');
-    });
-    const target = document.getElementById(viewId);
-    if (target) {
-        target.style.display = viewId === 'app-wrapper' ? 'flex' : 'block';
-        target.classList.add('active');
-    }
-};
-
-/**
- * ============================================================================
- * RENDERER PRINCIPALE (SPOKE ENGINE)
- * ============================================================================
- */
-window.renderApp = () => {
-    if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
-        State.activeSede = Object.keys(State.appStructure.sedi)[0];
-    }
-    document.documentElement.setAttribute('data-theme', State.currentTheme || 'dark');
-    
-    applyRolePermissions();
-    renderSidebar();
-    renderFolders();
-    renderMainContent();
-};
-
-function applyRolePermissions() {
-    const isAdmin = State.activeProfile === 'admin';
-    const profile = isAdmin ? null : State.appStructure.sedi[State.activeSede]?.roles.find(r => r.id === State.activeProfile);
-    
-    // Setup Label Operatore
-    const userLabel = document.getElementById('current-user-label');
-    if (userLabel) userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
-
-    // Iniezione Checklist Esterne (Solo per operatori con link configurati)
-    const checklistContainer = document.getElementById('spoke-checklists-container');
-    checklistContainer.innerHTML = '';
-    if (profile && (profile.linkApertura || profile.linkChiusura)) {
-        checklistContainer.style.display = 'flex';
-        if (profile.linkApertura) {
-            checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--success); color:#000; font-weight:800;" onclick="window.open('${profile.linkApertura}', '_blank')"><i class="fa-solid fa-sun"></i> CHECKLIST APERTURA</button>`;
-        }
-        if (profile.linkChiusura) {
-            checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--danger); color:#fff; font-weight:800;" onclick="window.open('${profile.linkChiusura}', '_blank')"><i class="fa-solid fa-moon"></i> CHECKLIST CHIUSURA</button>`;
-        }
-    } else {
-        checklistContainer.style.display = 'none';
-    }
-}
-
-function renderSidebar() {
-    const sediMenu = document.getElementById('sedi-menu');
-    const isAdmin = State.activeProfile === 'admin';
-    sediMenu.innerHTML = '';
+    let globalDeficits = [];
+    const currentDay = new Date().getDay();
 
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
-        const div = document.createElement('div');
-        div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
-        div.innerHTML = `<i class="fa-solid fa-shield"></i> ${sede.name}`;
-        
-        div.onclick = () => {
-            State.activeSede = sedeId;
-            State.activeFolder = Object.keys(sede.folders)[0] || null;
-            State.activeFilter = null; 
-            window.renderApp();
-            if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
-        };
-        if (isAdmin) {
-            let pressTimer;
-            div.onmousedown = div.ontouchstart = () => { pressTimer = setTimeout(() => window.editSede(sedeId), 800); };
-            div.onmouseup = div.ontouchend = () => clearTimeout(pressTimer);
-        }
-        sediMenu.appendChild(div);
+        Object.keys(sede.folders).forEach(folderId => {
+            const folder = sede.folders[folderId];
+            Object.keys(folder.sections).forEach(sectionId => {
+                const section = folder.sections[sectionId];
+                
+                section.items.forEach(item => {
+                    const stateKey = `${sedeId}_${folderId}_${sectionId}_${item.id}`;
+                    const itemState = State.appState[stateKey] || { done: false, n_op: '0', note: '' };
+                    
+                    let isDeficit = false;
+                    let localDeficitQty = 0;
+                    let centralDeficitQty = 0;
+                    let targetIdeal = 0;
+
+                    if (item.type === 'magazzino') {
+                        if (item.dailyIdeals && item.dailyIdeals.length === 7) {
+                            targetIdeal = State.peakOverride ? Math.max(...item.dailyIdeals) : item.dailyIdeals[currentDay];
+                        } else {
+                            targetIdeal = parseFloat(item.idealQty) || 0;
+                        }
+
+                        const actualQty = parseFloat(itemState.n_op) || 0;
+                        if (actualQty < targetIdeal) {
+                            isDeficit = true;
+                            localDeficitQty = targetIdeal - actualQty;
+                            const conversion = parseFloat(item.conversionRate) || 1;
+                            centralDeficitQty = Number((localDeficitQty * conversion + Number.EPSILON).toFixed(2));
+                        }
+                    } else {
+                        if (itemState.done || (itemState.n_op && parseFloat(itemState.n_op) > 0)) {
+                            isDeficit = true;
+                        }
+                    }
+
+                    if (isDeficit) {
+                        globalDeficits.push({
+                            sedeId, sedeName: sede.name, sectionName: section.name, sectionColor: section.color,
+                            itemName: item.name, itemType: item.type, localQty: localDeficitQty, uom: item.uom || 'pz',
+                            centralQty: centralDeficitQty, centralUom: item.centralUom || 'Kg',
+                            warehouse: item.centralWarehouseId || 'MAGAZZINO GENERALE',
+                            recipe: item.recipe || '', note: itemState.note || ''
+                        });
+                    }
+                });
+            });
+        });
     });
 
-    if (isAdmin) {
-        sediMenu.innerHTML += `<div class="nav-item add-btn" onclick="window.openSedeModal()"><i class="fa-solid fa-plus"></i> Nuova Sede</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--accent); border:1px solid rgba(201,164,100,0.3); background:rgba(201,164,100,0.05);" onclick="window.openOperatorListModal()"><i class="fa-solid fa-users"></i> GESTIONE OPERATORI</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--nexus); border:1px solid rgba(155,89,182,0.3); background:rgba(155,89,182,0.05);" onclick="window.openCloudModal()"><i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--danger); border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.05);" onclick="window.togglePeakOverride()"><i class="fa-solid fa-fire"></i> ${State.peakOverride ? 'DISATTIVA ALTO CARICO' : 'FORZA ALTO CARICO (PEAK)'}</div>`;
-    }
-
-    // Filtri Cromatici
-    const filtersMenu = document.getElementById('categories-filter-menu');
-    filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
-    
-    if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
-        const catMap = new Map();
-        Object.values(State.appStructure.sedi[State.activeSede].folders).forEach(f => {
-            if(f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
-        });
-        catMap.forEach((color, name) => {
-            filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${name}</div>`;
-        });
-    }
-}
-
-function renderFolders() {
-    const foldersMenu = document.getElementById('folders-menu');
-    const isAdmin = State.activeProfile === 'admin';
-    foldersMenu.innerHTML = '';
-
-    if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) return;
-
-    Object.entries(State.appStructure.sedi[State.activeSede].folders).forEach(([folderId, folder]) => {
-        const btn = document.createElement('button');
-        btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
-        btn.innerText = folder.name;
-        btn.onclick = () => { State.activeFolder = folderId; State.activeFilter = null; window.renderApp(); };
-        if (isAdmin) {
-            let pressTimer;
-            btn.onmousedown = btn.ontouchstart = () => { pressTimer = setTimeout(() => window.editFolder(folderId), 800); };
-            btn.onmouseup = btn.ontouchend = () => clearTimeout(pressTimer);
-        }
-        foldersMenu.appendChild(btn);
-    });
-
-    if (isAdmin) {
-        foldersMenu.innerHTML += `<button class="folder-tab add" style="border-style:dashed;" onclick="window.openFolderModal()"><i class="fa-solid fa-plus"></i> Nuovo Turno</button>`;
-    }
-}
-
-function renderMainContent() {
-    const content = document.getElementById('main-content');
-    const headerTitle = document.getElementById('header-title');
-    const isAdmin = State.activeProfile === 'admin';
-    content.innerHTML = '';
-
-    if (!State.activeSede || !State.activeFolder) {
-        headerTitle.innerText = "SISTEMA VERGINE / NESSUN TURNO";
+    if (globalDeficits.length === 0) {
+        actionsContainer.innerHTML = '';
+        content.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-check-circle" style="font-size: 3rem; margin-bottom:16px; opacity:0.2;"></i><br>Matrice Logistica Allineata.<br>Nessun deficit rilevato per i magazzini centrali.</div>';
         return;
     }
 
-    const sedeName = State.appStructure.sedi[State.activeSede].name;
-    const folderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
+    let rawReport = `*SCUTUM LOGISTIC ERP V20*\nData: ${new Date().toLocaleDateString('it-IT')}\n\n`;
+    let html = '';
+    const groupedByWarehouse = globalDeficits.reduce((acc, curr) => { (acc[curr.warehouse] = acc[curr.warehouse] || []).push(curr); return acc; }, {});
     
-    let killSwitchHtml = isAdmin ? `<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET TURNO</button>` : '';
-    headerTitle.innerHTML = `${sedeName} // ${folderName} ${killSwitchHtml}`;
-
-    const currentDay = new Date().getDay(); // 0 = Domenica, 6 = Sabato
-    const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
-
-    Object.entries(sections).forEach(([sectionId, section]) => {
-        if (State.activeFilter && section.name !== State.activeFilter) return;
-
-        // Estrazione e ordinamento F.I.F.O (HACCP)
-        let itemsToRender = [...(section.items || [])];
+    Object.keys(groupedByWarehouse).forEach(whName => {
+        rawReport += `📦 *ORIGINE PRELIEVO: ${whName.toUpperCase()}*\n`;
+        html += `<div style="margin-bottom: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 20px; background: rgba(0,0,0,0.15);">
+                    <h3 style="color: var(--nexus); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; font-weight:800;">
+                        <i class="fa-solid fa-boxes-stacked"></i> REPARTO: ${whName.toUpperCase()}
+                    </h3>`;
         
-        // Time-Gating Silenzioso
-        itemsToRender = itemsToRender.filter(item => {
-            if (State.peakOverride) return true; // L'Admin ha forzato la visibilità totale
-            if (!item.days || item.days.length === 0) return true; // Visibile sempre
-            return item.days.includes(currentDay);
-        });
-
-        // Ordinamento per Scadenza (i null finiscono in coda)
-        itemsToRender.sort((a, b) => {
-            if (!a.expiry) return 1;
-            if (!b.expiry) return -1;
-            return new Date(a.expiry) - new Date(b.expiry);
-        });
-
-        if (itemsToRender.length === 0 && !isAdmin) return; // Nasconde celle vuote agli operatori
-
-        const sectionDiv = document.createElement('div');
-        sectionDiv.className = 'section-container';
-        sectionDiv.style.borderTop = `4px solid ${section.color}`;
-        
-        let adminActions = isAdmin ? `<div style="display:flex; gap:16px;"><i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection('${sectionId}')"></i><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection('${sectionId}')"></i></div>` : '';
-        sectionDiv.innerHTML = `<div class="section-header"><h3 style="color:${section.color}; text-transform:uppercase; letter-spacing:1px; margin:0;">${section.name}</h3>${adminActions}</div>`;
-
-        itemsToRender.forEach(item => {
-            const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
-            const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
-            
-            // Calcolo Ideale Dinamico
-            let targetIdeal = 0;
-            if (item.type === 'magazzino') {
-                if (item.dailyIdeals && item.dailyIdeals.length === 7) {
-                    targetIdeal = State.peakOverride ? Math.max(...item.dailyIdeals) : item.dailyIdeals[currentDay];
-                } else {
-                    targetIdeal = item.idealQty || 0; // Retrocompatibilità
-                }
-            }
-
-            let typeBadge = item.type === 'magazzino' ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> SOGLIA: ${targetIdeal} ${item.uom || 'pz'}</span>` : '';
-            let supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${item.supplier}</span>` : '';
-            let expiryBadge = item.expiry ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:rgba(231,76,60,0.1); color:var(--danger);"><i class="fa-regular fa-clock"></i> SCAD: ${new Date(item.expiry).toLocaleDateString('it-IT')}</span>` : '';
-
-            let controlsHtml = '';
-            if (item.type === 'magazzino') {
-                controlsHtml = `
-                <div class="item-controls">
-                    <div style="display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:2px 4px;">
-                        <button onclick="window.hf_stepQty('${stateKey}', -1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">-</button>
-                        <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="0" style="width:50px; text-align:center; border:none; background:none; color:var(--text-main); font-weight:700; font-size:1.1rem;" onchange="window.hf_updateQty('${stateKey}', this.value)">
-                        <button onclick="window.hf_stepQty('${stateKey}', 1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">+</button>
-                    </div>
-                    <span class="unit-label" style="font-weight:700; color:var(--text-muted); min-width:30px;">${item.uom || 'pz'}</span>
-                </div>`;
+        groupedByWarehouse[whName].forEach(def => {
+            if (def.itemType === 'magazzino') {
+                rawReport += `  ▪️ ${def.itemName} -> *${def.centralQty} ${def.centralUom}* per Sede *${def.sedeName}*\n`;
+                if(def.note) rawReport += `     [Nota: ${def.note}]\n`;
             } else {
-                let checkboxHtml = itemState.done ? '<i class="fa-solid fa-check"></i>' : '';
-                controlsHtml = `
-                <div class="item-controls">
-                    <div class="input-group-inline">
-                        <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="Qt." onchange="window.hf_updateQty('${stateKey}', this.value)">
-                        <span class="unit-label">${item.uom || 'pz'}</span>
-                    </div>
-                    <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">${checkboxHtml}</div>
-                </div>`;
+                rawReport += `  ▪️ TASK/RIFORNIMENTO: ${def.itemName} per Sede *${def.sedeName}*\n`;
             }
 
-            const itemDiv = document.createElement('div');
-            itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
-            itemDiv.innerHTML = `
-                <div class="item-main">
-                    <div class="item-name-group">
-                        <span class="item-name">${item.name}</span>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge} ${expiryBadge}</div>
-                    </div>
-                    ${controlsHtml}
-                </div>
-                <div class="item-sub" style="margin-top: 8px;">
-                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa..." onchange="window.hf_updateNote('${stateKey}', this.value)">
-                </div>`;
+            let recipeBtn = def.recipe ? `<button class="btn-action" style="padding:4px 10px; font-size:0.75rem; width:auto; border-color:#3498db; color:#3498db;" onclick="window.hf_openRecipeView('${btoa(def.itemName)}', '${btoa(def.recipe)}')"><i class="fa-solid fa-book-open"></i> RICETTA</button>` : '';
+            let noteHtml = def.note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; font-style:italic;"><i class="fa-solid fa-comment"></i> ${def.note}</div>` : '';
+            let dispQty = def.itemType === 'magazzino' ? `<div><span style="color:var(--danger); font-weight:700; font-size:0.9rem;">${def.localQty} ${def.uom}</span> &rarr; <span style="color:var(--success); font-weight:800; font-size:1.2rem;">${def.centralQty} ${def.centralUom}</span></div>` : `<span style="background:var(--accent); color:var(--bg); font-weight:800; padding:4px 12px; border-radius:4px; font-size:0.9rem;">RIFORNIRE</span>`;
 
-            if (isAdmin) {
-                let pressTimer;
-                itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = setTimeout(() => window.hf_editItemModal(sectionId, item.id), 800); };
-                itemDiv.onmouseup = itemDiv.ontouchend = () => clearTimeout(pressTimer);
-            }
-
-            sectionDiv.appendChild(itemDiv);
+            html += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                        <div>
+                            <div style="font-weight: 800; font-size: 1.1rem;">${def.itemName}</div>
+                            <div style="font-size: 0.8rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">DESTINAZIONE: <span style="color:var(--accent);">${def.sedeName}</span> (${def.sectionName})</div>
+                            ${noteHtml}
+                        </div>
+                        <div style="text-align: right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                            ${dispQty}
+                            ${recipeBtn}
+                        </div>
+                     </div>`;
         });
-
-        if (isAdmin) {
-            sectionDiv.innerHTML += `<button class="btn-action" style="margin:16px; width:calc(100% - 32px); border:1px dashed var(--border);" onclick="window.hf_openItemModal('${sectionId}')"><i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO</button>`;
-        }
-        content.appendChild(sectionDiv);
+        rawReport += `\n`;
+        html += '</div>';
     });
 
-    if (isAdmin && !State.activeFilter) {
-        content.innerHTML += `<button class="btn-action" style="width:100%; margin-top:24px; border:1px dashed var(--text-muted);" onclick="window.openSectionModal()"><i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA</button>`;
+    window._cachedRawReport = rawReport.trim();
+    
+    actionsContainer.innerHTML = `
+        <button class="btn-action" style="flex:1; padding:14px;" onclick="window.hf_copyClipboardReport()"><i class="fa-solid fa-copy"></i> COPIA MATRICE</button>
+        <button class="btn-action solid" style="flex:1; padding:14px; background:#25D366; color:#000; border:none;" onclick="window.hf_exportWhatsApp()"><i class="fa-brands fa-whatsapp"></i> INVIA A CENTRALE</button>
+    `;
+    content.innerHTML = html;
+};
+
+window.hf_openRecipeView = (titleBase64, recipeBase64) => {
+    alert(`📖 SCHEDA TECNICA: ${atob(titleBase64)}\n\nISTRUZIONI DI PREPARAZIONE:\n${atob(recipeBase64)}`);
+};
+
+window.hf_copyClipboardReport = () => {
+    if (!window._cachedRawReport) return;
+    navigator.clipboard.writeText(window._cachedRawReport).then(() => alert("Report logistico copiato negli appunti."));
+};
+
+window.hf_exportWhatsApp = () => {
+    if (!window._cachedRawReport) return;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(window._cachedRawReport)}`, '_blank');
+};
+
+/**
+ * ============================================================================
+ * 2. COMPILATORE MODALE CRUD AVANZATO PRODOTTI (ITEM CON IDEALE DINAMICO)
+ * ============================================================================
+ */
+function hf_injectItemModal() {
+    if (document.getElementById('modal-item')) return;
+    const modalHTML = `
+    <div id="modal-item" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+        <div class="modal-box" style="max-height: 92vh; overflow-y: auto; width:100%; max-width:550px;">
+            <h2 id="item-modal-title" style="margin-bottom: 20px; color: var(--accent); font-weight:800;">SCHEDA ARTICOLO Avanzata</h2>
+            
+            <div class="input-group"><label>Nome Prodotto</label><input type="text" id="input-item-name"></div>
+            <div class="input-group"><label>Descrizione / Uso Logistico</label><input type="text" id="input-item-description" placeholder="Es. Per farcitura teglie"></div>
+            <div class="input-group"><label>Tipologia Funzionale</label>
+                <select id="input-item-type" onchange="window.hf_toggleMagazzinoFields()">
+                    <option value="standard">STANDARD (Task Binario / Spunta)</option>
+                    <option value="magazzino">MAGAZZINO (Ideale Dinamico & Conversione)</option>
+                </select>
+            </div>
+
+            <div id="magazzino-fields" style="display:none; background:rgba(52,152,219,0.05); border:1px dashed #3498db; padding:16px; border-radius:8px; margin-bottom:16px;">
+                <div style="font-weight:800; color:#3498db; margin-bottom:12px; font-size:0.8rem;"><i class="fa-solid fa-calculator"></i> MATRICE DELLE SOGLIE GIORNALIERE (IDEALE DINAMICO)</div>
+                <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; margin-bottom:16px;">
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">DOM</label><input type="number" id="ideal-0" style="padding:6px; text-align:center;"></div>
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">LUN</label><input type="number" id="ideal-1" style="padding:6px; text-align:center;"></div>
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">MAR</label><input type="number" id="ideal-2" style="padding:6px; text-align:center;"></div>
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">MER</label><input type="number" id="ideal-3" style="padding:6px; text-align:center;"></div>
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">GIO</label><input type="number" id="ideal-4" style="padding:6px; text-align:center;"></div>
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">VEN</label><input type="number" id="ideal-5" style="padding:6px; text-align:center;"></div>
+                    <div><label style="font-size:0.65rem; text-align:center; display:block;">SAB</label><input type="number" id="ideal-6" style="padding:6px; text-align:center;"></div>
+                </div>
+                <div style="display:flex; gap:12px; margin-bottom:12px;">
+                    <div class="input-group" style="flex:1; margin:0;"><label>UoM Pizzeria</label><input type="text" id="input-item-uom" placeholder="Es. Vaschette"></div>
+                    <div class="input-group" style="flex:1; margin:0;"><label>Moltiplicatore</label><input type="number" step="0.01" id="input-item-conversion" placeholder="Es. 0.6"></div>
+                    <div class="input-group" style="flex:1; margin:0;"><label>UoM Laboratorio</label><input type="text" id="input-item-central-uom" placeholder="Es. Kg"></div>
+                </div>
+                <div class="input-group"><label>Magazzino Centrale di Prelievo (Sorgente)</label><input type="text" id="input-item-warehouse" placeholder="Es. Cella Frigo Carni / Magazzino Secco"></div>
+                <div class="input-group"><label>Ricetta Tecnica / Istruzioni Cuochi</label><textarea id="input-item-recipe" rows="3" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid var(--border); color:#fff; border-radius:6px; padding:8px; font-family:inherit;"></textarea></div>
+            </div>
+
+            <div style="border-top:1px dashed var(--border); padding-top:12px; margin-bottom:20px;">
+                <label style="font-weight:800; color:var(--accent); font-size:0.75rem; display:block; margin-bottom:8px;">GIORNI DI ATTIVITÀ IN MATRICE (TIME-GATING)</label>
+                <div style="display:flex; justify-content:space-between; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
+                    <label><input type="checkbox" id="day-0"> D</label><label><input type="checkbox" id="day-1"> L</label><label><input type="checkbox" id="day-2"> M</label><label><input type="checkbox" id="day-3"> M</label><label><input type="checkbox" id="day-4"> G</label><label><input type="checkbox" id="day-5"> V</label><label><input type="checkbox" id="day-6"> S</label>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:12px; margin-bottom:20px;">
+                <div class="input-group" style="flex:1; margin:0;"><label>Fornitore</label><input type="text" id="input-item-supplier"></div>
+                <div class="input-group" style="flex:1; margin:0;"><label>Scadenza HACCP (FIFO)</label><input type="date" id="input-item-expiry"></div>
+            </div>
+
+            <div style="display: flex; gap: 16px;">
+                <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
+                <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-item" onclick="window.lazzaro_deleteItem()"><i class="fa-solid fa-trash"></i></button>
+                <button class="btn-action solid" onclick="window.lazzaro_saveItem()">CONFERMA ARTICOLO</button>
+            </div>
+        </div>
+    </div>`;
+    document.getElementById('modal-layer').insertAdjacentHTML('beforeend', modalHTML);
+}
+
+window.hf_toggleMagazzinoFields = () => {
+    document.getElementById('magazzino-fields').style.display = (document.getElementById('input-item-type').value === 'magazzino') ? 'block' : 'none';
+};
+
+window.hf_openItemModal = (sectionId) => {
+    hf_injectItemModal();
+    window._editContext = { type: 'item', sectionId, isNew: true };
+    document.getElementById('item-modal-title').innerText = 'NUOVO ARTICOLO OMNI-REPARTO';
+    document.getElementById('input-item-name').value = '';
+    document.getElementById('input-item-description').value = '';
+    document.getElementById('input-item-type').value = 'standard';
+    document.getElementById('input-item-uom').value = 'pz';
+    document.getElementById('input-item-conversion').value = '';
+    document.getElementById('input-item-central-uom').value = 'Kg';
+    document.getElementById('input-item-warehouse').value = '';
+    document.getElementById('input-item-recipe').value = '';
+    document.getElementById('input-item-supplier').value = '';
+    document.getElementById('input-item-expiry').value = '';
+    for(let i=0; i<7; i++) { document.getElementById(`ideal-${i}`).value = ''; document.getElementById(`day-${i}`).checked = true; }
+    document.getElementById('btn-delete-item').style.display = 'none';
+    window.hf_toggleMagazzinoFields();
+    document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-item').style.display = 'flex';
+};
+
+window.hf_editItemModal = (sectionId, itemId) => {
+    hf_injectItemModal();
+    window._editContext = { type: 'item', sectionId, itemId, isNew: false };
+    document.getElementById('item-modal-title').innerText = 'MODIFICA PRODOTTO STRUTTURALE';
+    
+    const item = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId].items.find(i => i.id === itemId);
+    if (!item) return;
+
+    document.getElementById('input-item-name').value = item.name || '';
+    document.getElementById('input-item-description').value = item.description || '';
+    document.getElementById('input-item-type').value = item.type || 'standard';
+    document.getElementById('input-item-uom').value = item.uom || 'pz';
+    document.getElementById('input-item-conversion').value = item.conversionRate || '';
+    document.getElementById('input-item-central-uom').value = item.centralUom || 'Kg';
+    document.getElementById('input-item-warehouse').value = item.centralWarehouseId || '';
+    document.getElementById('input-item-recipe').value = item.recipe || '';
+    document.getElementById('input-item-supplier').value = item.supplier || '';
+    document.getElementById('input-item-expiry').value = item.expiry || '';
+    
+    for(let i=0; i<7; i++) {
+        document.getElementById(`ideal-${i}`).value = item.dailyIdeals ? (item.dailyIdeals[i] || '') : '';
+        document.getElementById(`day-${i}`).checked = item.days ? item.days.includes(i) : true;
+    }
+    
+    document.getElementById('btn-delete-item').style.display = 'block';
+    window.hf_toggleMagazzinoFields();
+    document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-item').style.display = 'flex';
+};
+
+window.lazzaro_saveItem = async () => {
+    const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-item-name').value);
+    const type = document.getElementById('input-item-type').value;
+    if (!name) return alert("Inserire identificativo valido per il prodotto.");
+
+    let dailyIdeals = [];
+    let days = [];
+    for(let i=0; i<7; i++) {
+        dailyIdeals.push(Cerbero.cerbero_sanitizeNumber(document.getElementById(`ideal-${i}`).value));
+        if(document.getElementById(`day-${i}`).checked) days.push(i);
+    }
+
+    const payload = {
+        id: window._editContext.isNew ? 'itm_' + Date.now() : window._editContext.itemId,
+        name, type, description: Cerbero.cerbero_sanitizeText(document.getElementById('input-item-description').value),
+        supplier: Cerbero.cerbero_sanitizeText(document.getElementById('input-item-supplier').value),
+        expiry: document.getElementById('input-item-expiry').value, days,
+        uom: Cerbero.cerbero_sanitizeText(document.getElementById('input-item-uom').value) || 'pz'
+    };
+
+    if (type === 'magazzino') {
+        payload.dailyIdeals = dailyIdeals;
+        payload.conversionRate = Cerbero.cerbero_sanitizeNumber(document.getElementById('input-item-conversion').value) || 1;
+        payload.centralUom = Cerbero.cerbero_sanitizeText(document.getElementById('input-item-central-uom').value) || 'Kg';
+        payload.centralWarehouseId = Cerbero.cerbero_sanitizeText(document.getElementById('input-item-warehouse').value) || 'MAGAZZINO GENERALE';
+        payload.recipe = Cerbero.cerbero_sanitizeText(document.getElementById('input-item-recipe').value);
+    }
+
+    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.sectionId];
+    if (window._editContext.isNew) section.items.push(payload);
+    else {
+        const idx = section.items.findIndex(i => i.id === window._editContext.itemId);
+        if (idx !== -1) section.items[idx] = payload;
+    }
+
+    window.closeModals(); window.renderApp(); await lazzaro_saveState();
+};
+
+window.lazzaro_deleteItem = async () => {
+    if (!confirm("Eliminare definitivamente la referenza dalla matrice logistica?")) return;
+    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.sectionId];
+    section.items = section.items.filter(i => i.id !== window._editContext.itemId);
+    window.closeModals(); window.renderApp(); await lazzaro_saveState();
+};
+
+/**
+ * ============================================================================
+ * 3. GESTIONE OPERATORI (CON LINK ESTERNI) E KILL SWITCH
+ * ============================================================================
+ */
+function injectOperatorModals() {
+    if (document.getElementById('modal-operator-list')) return;
+    const modalHTML = `
+    <div id="modal-operator-list" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+        <div class="modal-box">
+            <h2 style="margin-bottom: 24px; color: var(--accent);"><i class="fa-solid fa-users"></i> DIPENDENTI SEDE</h2>
+            <div id="operator-list-container" style="margin-bottom: 24px; max-height: 40vh; overflow-y: auto;"></div>
+            <button class="btn-action" style="margin-bottom: 16px; border: 1px dashed var(--border);" onclick="window.openOperatorDetailModal()"><i class="fa-solid fa-plus"></i> AGGIUNGI OPERATORE</button>
+            <button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO</button>
+        </div>
+    </div>
+    <div id="modal-operator-detail" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+        <div class="modal-box">
+            <h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA OPERATORE</h2>
+            <div class="input-group"><label>Nome Visualizzato</label><input type="text" id="input-op-name" placeholder="Es. Mario Rossi"></div>
+            <div class="input-group"><label>PIN di Accesso (Solo Numeri)</label><input type="number" pattern="[0-9]*" inputmode="numeric" id="input-op-pin" placeholder="Es. 1234"></div>
+            <div class="input-group"><label>URL Checklist Apertura (Google Forms / App)</label><input type="url" id="input-op-apertura" placeholder="https://..."></div>
+            <div class="input-group"><label>URL Checklist Chiusura (Google Forms / App)</label><input type="url" id="input-op-chiusura" placeholder="https://..."></div>
+            <div style="display: flex; gap: 16px; margin-top: auto;">
+                <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
+                <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-op" onclick="window.deleteOperatorLogic()"><i class="fa-solid fa-trash"></i> RIMUOVI</button>
+                <button class="btn-action solid" onclick="window.saveOperatorLogic()">SALVA</button>
+            </div>
+        </div>
+    </div>`;
+    document.getElementById('modal-layer').insertAdjacentHTML('beforeend', modalHTML);
+}
+
+window.openOperatorListModal = () => { 
+    if (!State.activeSede) return; 
+    injectOperatorModals(); 
+    const sede = State.appStructure.sedi[State.activeSede]; 
+    if (!sede.roles) sede.roles = []; 
+    const container = document.getElementById('operator-list-container'); 
+    container.innerHTML = ''; 
+    
+    if (sede.roles.length === 0) { 
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Nessun operatore configurato.</div>'; 
+    } else { 
+        sede.roles.forEach(op => { 
+            const div = document.createElement('div'); 
+            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.2); border-radius:8px; margin-bottom:8px;"; 
+            div.innerHTML = `<div><div style="font-weight:700;">${op.name}</div><div style="font-size:0.8rem; color:var(--text-muted);">PIN: ${op.pin}</div></div><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--accent); padding:8px;" onclick="window.openOperatorDetailModal('${op.id}')"></i>`; 
+            container.appendChild(div); 
+        }); 
+    } 
+    document.getElementById('modal-layer').style.display = 'flex'; 
+    document.getElementById('modal-operator-list').style.display = 'flex'; 
+};
+
+window.openOperatorDetailModal = (opId = null) => {
+    window.closeModals();
+    injectOperatorModals();
+    window._editContext = opId ? { type: 'operator', id: opId, isNew: false } : { type: 'operator', isNew: true };
+    document.getElementById('op-modal-title').innerText = opId ? 'MODIFICA PROFILO OPERATIVO' : 'NUOVO OPERATORE RETE';
+    
+    const inputName = document.getElementById('input-op-name');
+    const inputPin = document.getElementById('input-op-pin');
+
+    if (opId) {
+        const op = State.appStructure.sedi[State.activeSede].roles.find(r => r.id === opId);
+        inputName.value = op.name; inputPin.value = op.pin;
+        document.getElementById('input-op-apertura').value = op.linkApertura || '';
+        document.getElementById('input-op-chiusura').value = op.linkChiusura || '';
+        document.getElementById('btn-delete-op').style.display = 'block';
+    } else {
+        inputName.value = ''; inputPin.value = '';
+        document.getElementById('input-op-apertura').value = ''; document.getElementById('input-op-chiusura').value = '';
+        document.getElementById('btn-delete-op').style.display = 'none';
+    }
+    document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-operator-detail').style.display = 'flex';
+};
+
+window.saveOperatorLogic = async () => {
+    const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-op-name').value);
+    const pin = document.getElementById('input-op-pin').value.trim();
+    const linkApertura = document.getElementById('input-op-apertura').value.trim();
+    const linkChiusura = document.getElementById('input-op-chiusura').value.trim();
+    if (!name || !pin) return;
+    
+    const sede = State.appStructure.sedi[State.activeSede];
+    if (window._editContext.isNew && sede.roles.some(r => r.pin === pin)) return alert("PIN già assegnato.");
+
+    const payload = { id: window._editContext.isNew ? 'op_' + Date.now() : window._editContext.id, name, pin, linkApertura, linkChiusura };
+
+    if (window._editContext.isNew) sede.roles.push(payload);
+    else { const idx = sede.roles.findIndex(r => r.id === window._editContext.id); if (idx !== -1) sede.roles[idx] = payload; }
+    
+    window.closeModals(); await lazzaro_saveState(); window.openOperatorListModal();
+};
+
+window.deleteOperatorLogic = async () => {
+    if (!confirm("Vuoi davvero revocare l'accesso a questo operatore?")) return;
+    const sede = State.appStructure.sedi[State.activeSede];
+    sede.roles = sede.roles.filter(r => r.id !== window._editContext.id);
+    window.closeModals(); await lazzaro_saveState(); window.openOperatorListModal();
+};
+
+window.nukeCurrentTurnLogic = async () => {
+    if (!confirm("ATTENZIONE OPERATIVA: Svuotare completamente tutte le quantità registrate in questo turno?\nQuesta operazione non è reversibile.")) return;
+    const prefix = `${State.activeSede}_${State.activeFolder}_`;
+    Object.keys(State.appState).forEach(key => { if (key.startsWith(prefix)) { State.appState[key].done = false; State.appState[key].n_op = ''; } });
+    window.renderApp(); await lazzaro_saveState();
+};
+
+/**
+ * ============================================================================
+ * 4. STRUTTURA E GERARCHIA (CRUD SEDI, TURNI, CELLE LOGICHE)
+ * ============================================================================
+ */
+function injectStructuralModals() {
+    const layer = document.getElementById('modal-layer');
+    if (!layer) return;
+
+    if (!document.getElementById('modal-sede')) {
+        layer.insertAdjacentHTML('beforeend', '<div id="modal-sede" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="sede-modal-title" style="margin-bottom: 24px; color: var(--accent);">RETE LOGISTICA</h2><div class="input-group"><label>Nome Sede</label><input type="text" id="input-sede-name" placeholder="Es. Fiumicino"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-sede" onclick="window.deleteSedeLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSedeLogic()">SALVA</button></div></div></div>');
+    }
+    if (!document.getElementById('modal-folder')) {
+        layer.insertAdjacentHTML('beforeend', '<div id="modal-folder" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="folder-modal-title" style="margin-bottom: 24px; color: var(--accent);">TURNO OPERATIVO</h2><div class="input-group"><label>Nome Turno</label><input type="text" id="input-folder-name" placeholder="Es. Mattina"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-folder" onclick="window.deleteFolderLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveFolderLogic()">SALVA</button></div></div></div>');
+    }
+    if (!document.getElementById('modal-section')) {
+        layer.insertAdjacentHTML('beforeend', '<div id="modal-section" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="section-modal-title" style="margin-bottom: 24px; color: var(--accent);">CELLA LOGICA</h2><div class="input-group" style="margin-bottom: 16px;"><label>Nome Cella</label><input type="text" id="input-section-name" placeholder="Es. Frigo Carni"></div><div class="input-group"><label>Linea (Colore)</label><select id="input-section-color"><option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option><option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option><option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option><option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option><option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option></select></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-section" onclick="window.deleteSectionLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSectionLogic()">SALVA</button></div></div></div>');
     }
 }
+
+// === SEDI ===
+window.openSedeModal = () => { injectStructuralModals(); window._editContext = { type: 'sede', isNew: true }; document.getElementById('sede-modal-title').innerText = 'NUOVA RETE LOGISTICA'; document.getElementById('input-sede-name').value = ''; document.getElementById('btn-delete-sede').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-sede').style.display = 'flex'; };
+window.editSede = (sedeId) => { injectStructuralModals(); window._editContext = { type: 'sede', id: sedeId, isNew: false }; document.getElementById('sede-modal-title').innerText = 'MODIFICA RETE LOGISTICA'; document.getElementById('input-sede-name').value = State.appStructure.sedi[sedeId].name; document.getElementById('btn-delete-sede').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-sede').style.display = 'flex'; };
+window.saveSedeLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-sede-name').value); if (!name) return; if (!window._editContext.isNew) { State.appStructure.sedi[window._editContext.id].name = name; } else { const newId = 'sede_' + Date.now(); State.appStructure.sedi[newId] = { name: name, roles: [], folders: {} }; State.activeSede = newId; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+window.deleteSedeLogic = async () => { if (!confirm("ATTENZIONE: Eliminando la Sede perderai TUTTI i dati. Procedere?")) return; delete State.appStructure.sedi[window._editContext.id]; if (State.activeSede === window._editContext.id) { State.activeSede = Object.keys(State.appStructure.sedi)[0] || null; State.activeFolder = State.activeSede ? (Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null) : null; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+
+// === TURNI ===
+window.openFolderModal = () => { injectStructuralModals(); window._editContext = { type: 'folder', isNew: true }; document.getElementById('folder-modal-title').innerText = 'NUOVO TURNO OPERATIVO'; document.getElementById('input-folder-name').value = ''; document.getElementById('btn-delete-folder').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-folder').style.display = 'flex'; };
+window.editFolder = (folderId) => { injectStructuralModals(); window._editContext = { type: 'folder', id: folderId, isNew: false }; document.getElementById('folder-modal-title').innerText = 'MODIFICA TURNO'; document.getElementById('input-folder-name').value = State.appStructure.sedi[State.activeSede].folders[folderId].name; document.getElementById('btn-delete-folder').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-folder').style.display = 'flex'; };
+window.saveFolderLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-folder-name').value); if (!name || !State.activeSede) return; if (!window._editContext.isNew) { State.appStructure.sedi[State.activeSede].folders[window._editContext.id].name = name; } else { const newId = 'fold_' + Date.now(); State.appStructure.sedi[State.activeSede].folders[newId] = { name: name, sections: {} }; State.activeFolder = newId; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+window.deleteFolderLogic = async () => { if (!confirm("Vuoi eliminare questo Turno e tutte le sue celle?")) return; delete State.appStructure.sedi[State.activeSede].folders[window._editContext.id]; if (State.activeFolder === window._editContext.id) State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+
+// === CELLE ===
+window.openSectionModal = () => { injectStructuralModals(); window._editContext = { type: 'section', isNew: true }; document.getElementById('section-modal-title').innerText = 'NUOVA CELLA LOGICA'; document.getElementById('input-section-name').value = ''; document.getElementById('btn-delete-section').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
+window.editSection = (sectionId) => { injectStructuralModals(); window._editContext = { type: 'section', id: sectionId, isNew: false }; document.getElementById('section-modal-title').innerText = 'MODIFICA CELLA LOGICA'; const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId]; document.getElementById('input-section-name').value = sec.name; document.getElementById('input-section-color').value = sec.color; document.getElementById('btn-delete-section').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
+window.saveSectionLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-section-name').value); const color = document.getElementById('input-section-color').value; if (!name || !State.activeSede || !State.activeFolder) return; if (!window._editContext.isNew) { const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; sec.name = name; sec.color = color; } else { const newId = 'sec_' + Date.now(); State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[newId] = { name: name, color: color, items: [] }; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
+window.deleteSectionLogic = async () => { if (!confirm("Vuoi eliminare questa Cella Logica e tutti i prodotti al suo interno?")) return; delete State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
