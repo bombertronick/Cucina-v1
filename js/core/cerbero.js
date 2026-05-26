@@ -52,10 +52,15 @@ export const Cerbero = {
     },
 
     cerbero_sanitizeText: (text) => {
-        return (text || '').toString().replace(/[\<\>\&\"\'\/]/g, (s) => {
-            const entityMap = { '<': '&lt;', 'Point': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;', '/': '&#x2x;' };
-            return entityMap[s] || s;
-        }).trim();
+        if (!text) return '';
+        return text.toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;')
+            .replace(/\//g, '&#x2F;')
+            .trim();
     }
 };
 
