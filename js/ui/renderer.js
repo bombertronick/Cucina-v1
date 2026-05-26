@@ -1,67 +1,137 @@
 // File: js/ui/renderer.js
 import { State } from '../core/state.js';
-import { saveState } from '../core/lazzaro.js'; // FIX: Importazione stabile in cima
+import { Cerbero } from '../core/cerbero.js';
+import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
  * ============================================================================
- * CONTROLLER DI ACCESSO E PERMESSI (RBAC)
+ * CONTROLLER ACCESSO (LOGIN A FISARMONICA & LOCKOUT)
  * ============================================================================
  */
-function applyRolePermissions() {
-    const isAdmin = State.activeProfile === 'admin';
-    const pasteBtn = document.getElementById('floating-paste-btn');
-    if (pasteBtn) {
-        pasteBtn.style.display = (isAdmin && State.clipboardSection) ? 'flex' : 'none';
-    }
+window.performLogin = () => {
+    const profileId = document.getElementById('login-profile').value;
+    const pinInput = document.getElementById('login-password').value;
     
-    const userLabel = document.getElementById('current-user-label');
-    if (userLabel) {
-        if (isAdmin) {
-            userLabel.innerText = 'ROOT (AMMINISTRATORE)';
+    let actualPin = '';
+    if (profileId === 'admin') {
+        actualPin = '2002'; // Hardcoded fallback per Root
+    } else {
+        const sede = State.appStructure.sedi[State.activeSede];
+        const role = sede ? sede.roles.find(r => r.id === profileId) : null;
+        if (role) actualPin = role.pin;
+    }
+
+    const auth = Cerbero.cerbero_validatePin(profileId, pinInput, actualPin);
+
+    if (auth.success) {
+        State.activeProfile = profileId;
+        document.getElementById('login-password').value = '';
+        document.getElementById('login-lockout-msg').style.display = 'none';
+        
+        // Transizione SPA
+        document.getElementById('auth-screen').classList.remove('active');
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('app-wrapper').style.display = 'flex';
+        document.getElementById('app-wrapper').classList.add('active');
+        
+        window.renderApp();
+    } else {
+        document.getElementById('login-password').value = '';
+        if (auth.reason === 'LOCKOUT_TRIGGERED' || auth.reason === 'LOCKED') {
+            const lockoutMsg = document.getElementById('login-lockout-msg');
+            lockoutMsg.style.display = 'block';
+            document.getElementById('lockout-timer').innerText = auth.timeLeft;
+            if(window.haptic) window.haptic([100, 50, 100]); // Haptic feedback di errore severo
+            
+            // Loop visivo del timer
+            let timeLeft = auth.timeLeft;
+            const timerInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    lockoutMsg.style.display = 'none';
+                } else {
+                    document.getElementById('lockout-timer').innerText = timeLeft;
+                }
+            }, 1000);
         } else {
-            let opName = 'OPERATORE STANDARD';
-            if (State.activeSede && State.appStructure.sedi[State.activeSede].roles) {
-                const op = State.appStructure.sedi[State.activeSede].roles.find(r => r.id === State.activeProfile);
-                if (op) opName = op.name.toUpperCase();
-            }
-            userLabel.innerText = opName;
+            if(window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
         }
     }
-}
+};
 
 /**
  * ============================================================================
- * STEPPER MATEMATICO DINAMICO PER TIPOLOGIA MAGAZZINO
+ * GESTIONE TEMA E OVERRIDE DI CARICO
  * ============================================================================
  */
-window.hf_stepQty = async (stateKey, amount) => {
-    if (!State.appState[stateKey]) {
-        State.appState[stateKey] = { done: false, n_op: '0', note: '' };
-    }
-    let current = parseFloat(State.appState[stateKey].n_op) || 0;
+window.toggleTheme = async () => {
+    State.currentTheme = State.currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', State.currentTheme);
+    await lazzaro_saveState();
+};
+
+window.togglePeakOverride = async () => {
+    State.peakOverride = !State.peakOverride;
+    await lazzaro_saveState();
+    window.renderApp();
+    if(window.showToast) window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
+};
+
+/**
+ * ============================================================================
+ * INPUT IBRIDO BRUTALISTA (STEPPER + TEXT) E MUTAZIONI
+ * ============================================================================
+ */
+window.hf_stepQty = (stateKey, amount) => {
+    let current = Cerbero.cerbero_sanitizeNumber(State.appState[stateKey]?.n_op || '0');
     current += amount;
     if (current < 0) current = 0;
-    State.appState[stateKey].n_op = current.toString();
-    
+    lazzaro_stampMutation(stateKey, 'n_op', current.toString());
     window.renderApp();
-    await saveState(); // FIX: Salvataggio istantaneo sicuro
     if (window.haptic) window.haptic(15);
 };
 
-// FIX: PONTE DI COMPATIBILITÀ PER INDEX.HTML
-window.renderNexusHub = () => {
-    if (window.hf_renderNexusHub) window.hf_renderNexusHub();
+window.hf_updateQty = (stateKey, value) => {
+    const cleanValue = Cerbero.cerbero_sanitizeNumber(value);
+    lazzaro_stampMutation(stateKey, 'n_op', cleanValue.toString());
+    window.renderApp();
+};
+
+window.hf_updateNote = (stateKey, value) => {
+    const cleanNote = Cerbero.cerbero_sanitizeText(value);
+    lazzaro_stampMutation(stateKey, 'note', cleanNote);
+};
+
+window.toggleDone = (stateKey) => {
+    const currentState = State.appState[stateKey]?.done || false;
+    lazzaro_stampMutation(stateKey, 'done', !currentState);
+    window.renderApp();
+    if (window.haptic) window.haptic(20);
+};
+
+window.switchSpaView = (viewId) => {
+    document.querySelectorAll('.spa-view').forEach(v => {
+        v.style.display = 'none';
+        v.classList.remove('active');
+    });
+    const target = document.getElementById(viewId);
+    if (target) {
+        target.style.display = viewId === 'app-wrapper' ? 'flex' : 'block';
+        target.classList.add('active');
+    }
 };
 
 /**
  * ============================================================================
- * RENDERER PRINCIPALE
+ * RENDERER PRINCIPALE (SPOKE ENGINE)
  * ============================================================================
  */
 window.renderApp = () => {
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
+    document.documentElement.setAttribute('data-theme', State.currentTheme || 'dark');
     
     applyRolePermissions();
     renderSidebar();
@@ -69,15 +139,32 @@ window.renderApp = () => {
     renderMainContent();
 };
 
-/**
- * ============================================================================
- * RENDERER: SIDEBAR LOGISTICA INTERATTIVA
- * ============================================================================
- */
+function applyRolePermissions() {
+    const isAdmin = State.activeProfile === 'admin';
+    const profile = isAdmin ? null : State.appStructure.sedi[State.activeSede]?.roles.find(r => r.id === State.activeProfile);
+    
+    // Setup Label Operatore
+    const userLabel = document.getElementById('current-user-label');
+    if (userLabel) userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
+
+    // Iniezione Checklist Esterne (Solo per operatori con link configurati)
+    const checklistContainer = document.getElementById('spoke-checklists-container');
+    checklistContainer.innerHTML = '';
+    if (profile && (profile.linkApertura || profile.linkChiusura)) {
+        checklistContainer.style.display = 'flex';
+        if (profile.linkApertura) {
+            checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--success); color:#000; font-weight:800;" onclick="window.open('${profile.linkApertura}', '_blank')"><i class="fa-solid fa-sun"></i> CHECKLIST APERTURA</button>`;
+        }
+        if (profile.linkChiusura) {
+            checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--danger); color:#fff; font-weight:800;" onclick="window.open('${profile.linkChiusura}', '_blank')"><i class="fa-solid fa-moon"></i> CHECKLIST CHIUSURA</button>`;
+        }
+    } else {
+        checklistContainer.style.display = 'none';
+    }
+}
+
 function renderSidebar() {
     const sediMenu = document.getElementById('sedi-menu');
-    if (!sediMenu) return;
-    
     const isAdmin = State.activeProfile === 'admin';
     sediMenu.innerHTML = '';
 
@@ -85,206 +172,144 @@ function renderSidebar() {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
         div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
-        div.innerHTML = '<i class="fa-solid fa-shield"></i> ' + sede.name;
+        div.innerHTML = `<i class="fa-solid fa-shield"></i> ${sede.name}`;
         
         div.onclick = () => {
             State.activeSede = sedeId;
-            State.activeFolder = Object.keys(State.appStructure.sedi[sedeId].folders)[0] || null;
+            State.activeFolder = Object.keys(sede.folders)[0] || null;
             State.activeFilter = null; 
             window.renderApp();
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
         };
-
         if (isAdmin) {
             let pressTimer;
-            div.onmousedown = div.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editSede(sedeId), 800); };
-            div.onmouseup = div.ontouchend = () => { clearTimeout(pressTimer); };
+            div.onmousedown = div.ontouchstart = () => { pressTimer = setTimeout(() => window.editSede(sedeId), 800); };
+            div.onmouseup = div.ontouchend = () => clearTimeout(pressTimer);
         }
         sediMenu.appendChild(div);
     });
 
     if (isAdmin) {
-        const addSedeBtn = document.createElement('div');
-        addSedeBtn.className = 'nav-item add-btn';
-        addSedeBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Nuova Rete (Sede)';
-        addSedeBtn.onclick = () => window.openSedeModal();
-        sediMenu.appendChild(addSedeBtn);
-
-        const operatorBtn = document.createElement('div');
-        operatorBtn.className = 'nav-item';
-        operatorBtn.style.marginTop = '16px';
-        operatorBtn.style.color = 'var(--accent)';
-        operatorBtn.style.border = '1px solid rgba(201, 164, 100, 0.3)';
-        operatorBtn.style.background = 'rgba(201, 164, 100, 0.05)';
-        operatorBtn.innerHTML = '<i class="fa-solid fa-users"></i> GESTIONE OPERATORI';
-        operatorBtn.onclick = () => { 
-            window.openOperatorListModal(); 
-            if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
-        };
-        sediMenu.appendChild(operatorBtn);
-
-        const cloudBtn = document.createElement('div');
-        cloudBtn.className = 'nav-item';
-        cloudBtn.style.marginTop = '8px';
-        cloudBtn.style.color = 'var(--nexus)';
-        cloudBtn.style.border = '1px solid rgba(155, 89, 182, 0.3)';
-        cloudBtn.style.background = 'rgba(155, 89, 182, 0.05)';
-        cloudBtn.innerHTML = '<i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT';
-        cloudBtn.onclick = () => { 
-            window.openCloudModal(); 
-            if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
-        };
-        sediMenu.appendChild(cloudBtn);
+        sediMenu.innerHTML += `<div class="nav-item add-btn" onclick="window.openSedeModal()"><i class="fa-solid fa-plus"></i> Nuova Sede</div>`;
+        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--accent); border:1px solid rgba(201,164,100,0.3); background:rgba(201,164,100,0.05);" onclick="window.openOperatorListModal()"><i class="fa-solid fa-users"></i> GESTIONE OPERATORI</div>`;
+        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--nexus); border:1px solid rgba(155,89,182,0.3); background:rgba(155,89,182,0.05);" onclick="window.openCloudModal()"><i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT</div>`;
+        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--danger); border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.05);" onclick="window.togglePeakOverride()"><i class="fa-solid fa-fire"></i> ${State.peakOverride ? 'DISATTIVA ALTO CARICO' : 'FORZA ALTO CARICO (PEAK)'}</div>`;
     }
 
+    // Filtri Cromatici
     const filtersMenu = document.getElementById('categories-filter-menu');
-    if (!filtersMenu) return;
-    filtersMenu.innerHTML = '';
+    filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
     
-    const allFilter = document.createElement('div');
-    allFilter.className = 'nav-item ' + (!State.activeFilter ? 'active' : '');
-    allFilter.innerHTML = '<i class="fa-solid fa-border-all"></i> Spazio Globale';
-    allFilter.onclick = () => { State.activeFilter = null; window.renderApp(); };
-    filtersMenu.appendChild(allFilter);
-
-    const categories = getUniqueCategories(State.activeSede);
-    categories.forEach(cat => {
-        const catDiv = document.createElement('div');
-        catDiv.className = 'nav-item ' + (State.activeFilter === cat.name ? 'active' : '');
-        catDiv.innerHTML = '<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:' + cat.color + '; margin-right:12px;"></span> ' + cat.name;
-        catDiv.onclick = () => { State.activeFilter = cat.name; window.renderApp(); };
-        filtersMenu.appendChild(catDiv);
-    });
+    if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
+        const catMap = new Map();
+        Object.values(State.appStructure.sedi[State.activeSede].folders).forEach(f => {
+            if(f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
+        });
+        catMap.forEach((color, name) => {
+            filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${name}</div>`;
+        });
+    }
 }
 
-/**
- * ============================================================================
- * RENDERER: TURNI OPERATIVI (FOLDERS)
- * ============================================================================
- */
 function renderFolders() {
     const foldersMenu = document.getElementById('folders-menu');
-    if (!foldersMenu) return;
-    
     const isAdmin = State.activeProfile === 'admin';
     foldersMenu.innerHTML = '';
 
     if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) return;
 
-    const folders = State.appStructure.sedi[State.activeSede].folders;
-
-    Object.keys(folders).forEach(folderId => {
-        const folder = folders[folderId];
+    Object.entries(State.appStructure.sedi[State.activeSede].folders).forEach(([folderId, folder]) => {
         const btn = document.createElement('button');
         btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
         btn.innerText = folder.name;
-        
-        btn.onclick = () => {
-            State.activeFolder = folderId;
-            State.activeFilter = null;
-            window.renderApp();
-        };
-
+        btn.onclick = () => { State.activeFolder = folderId; State.activeFilter = null; window.renderApp(); };
         if (isAdmin) {
             let pressTimer;
-            btn.onmousedown = btn.ontouchstart = () => { pressTimer = window.setTimeout(() => window.editFolder(folderId), 800); };
-            btn.onmouseup = btn.ontouchend = () => { clearTimeout(pressTimer); };
+            btn.onmousedown = btn.ontouchstart = () => { pressTimer = setTimeout(() => window.editFolder(folderId), 800); };
+            btn.onmouseup = btn.ontouchend = () => clearTimeout(pressTimer);
         }
         foldersMenu.appendChild(btn);
     });
 
     if (isAdmin) {
-        const addFolderBtn = document.createElement('button');
-        addFolderBtn.className = 'folder-tab add';
-        addFolderBtn.style.borderStyle = 'dashed';
-        addFolderBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Nuovo Turno';
-        addFolderBtn.onclick = () => window.openFolderModal();
-        foldersMenu.appendChild(addFolderBtn);
+        foldersMenu.innerHTML += `<button class="folder-tab add" style="border-style:dashed;" onclick="window.openFolderModal()"><i class="fa-solid fa-plus"></i> Nuovo Turno</button>`;
     }
 }
 
-/**
- * ============================================================================
- * RENDERER: MATRICE BRUTALISTA E CONTROLLI CONDIZIONALI
- * ============================================================================
- */
 function renderMainContent() {
     const content = document.getElementById('main-content');
     const headerTitle = document.getElementById('header-title');
-    if (!content || !headerTitle) return;
-    
     const isAdmin = State.activeProfile === 'admin';
     content.innerHTML = '';
 
-    if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) {
-        headerTitle.innerText = "SISTEMA VERGINE - CREA UNA SEDE";
+    if (!State.activeSede || !State.activeFolder) {
+        headerTitle.innerText = "SISTEMA VERGINE / NESSUN TURNO";
         return;
     }
 
-    if (!State.activeFolder || !State.appStructure.sedi[State.activeSede].folders[State.activeFolder]) {
-        headerTitle.innerText = "NESSUN TURNO ATTIVO";
-        return;
-    }
-
-    const currentSedeName = State.appStructure.sedi[State.activeSede].name;
-    const currentFolderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
+    const sedeName = State.appStructure.sedi[State.activeSede].name;
+    const folderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
     
-    let killSwitchHtml = '';
-    if (isAdmin) {
-        killSwitchHtml = '<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET</button>';
-    }
+    let killSwitchHtml = isAdmin ? `<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET TURNO</button>` : '';
+    headerTitle.innerHTML = `${sedeName} // ${folderName} ${killSwitchHtml}`;
 
-    headerTitle.innerHTML = currentSedeName + ' // ' + currentFolderName + killSwitchHtml;
-
+    const currentDay = new Date().getDay(); // 0 = Domenica, 6 = Sabato
     const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
 
-    Object.keys(sections).forEach(sectionId => {
-        const section = sections[sectionId];
-        
+    Object.entries(sections).forEach(([sectionId, section]) => {
         if (State.activeFilter && section.name !== State.activeFilter) return;
+
+        // Estrazione e ordinamento F.I.F.O (HACCP)
+        let itemsToRender = [...(section.items || [])];
+        
+        // Time-Gating Silenzioso
+        itemsToRender = itemsToRender.filter(item => {
+            if (State.peakOverride) return true; // L'Admin ha forzato la visibilità totale
+            if (!item.days || item.days.length === 0) return true; // Visibile sempre
+            return item.days.includes(currentDay);
+        });
+
+        // Ordinamento per Scadenza (i null finiscono in coda)
+        itemsToRender.sort((a, b) => {
+            if (!a.expiry) return 1;
+            if (!b.expiry) return -1;
+            return new Date(a.expiry) - new Date(b.expiry);
+        });
+
+        if (itemsToRender.length === 0 && !isAdmin) return; // Nasconde celle vuote agli operatori
 
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'section-container';
-        sectionDiv.style.borderTop = '4px solid ' + section.color;
+        sectionDiv.style.borderTop = `4px solid ${section.color}`;
         
-        let adminActions = '';
-        if (isAdmin) {
-            adminActions = '<div style="display:flex; gap:16px;">' +
-                           '<i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection(\'' + sectionId + '\')"></i>' +
-                           '<i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection(\'' + sectionId + '\')"></i>' +
-                           '</div>';
-        }
+        let adminActions = isAdmin ? `<div style="display:flex; gap:16px;"><i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection('${sectionId}')"></i><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection('${sectionId}')"></i></div>` : '';
+        sectionDiv.innerHTML = `<div class="section-header"><h3 style="color:${section.color}; text-transform:uppercase; letter-spacing:1px; margin:0;">${section.name}</h3>${adminActions}</div>`;
 
-        const sectionHeader = document.createElement('div');
-        sectionHeader.className = 'section-header';
-        sectionHeader.innerHTML = '<h3 style="color: ' + section.color + '; text-transform: uppercase; letter-spacing: 1px; margin:0;">' + section.name + '</h3>' + adminActions;
-        sectionDiv.appendChild(sectionHeader);
-
-        section.items.forEach((item) => {
-            const stateKey = State.activeSede + '_' + State.activeFolder + '_' + sectionId + '_' + item.id;
+        itemsToRender.forEach(item => {
+            const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
             const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
             
-            let typeBadge = '';
+            // Calcolo Ideale Dinamico
+            let targetIdeal = 0;
             if (item.type === 'magazzino') {
-                typeBadge = '<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> CONVERSIONE (Ideal: ' + (item.idealQty || 0) + ' ' + (item.uom || 'pz') + ')</span>';
+                if (item.dailyIdeals && item.dailyIdeals.length === 7) {
+                    targetIdeal = State.peakOverride ? Math.max(...item.dailyIdeals) : item.dailyIdeals[currentDay];
+                } else {
+                    targetIdeal = item.idealQty || 0; // Retrocompatibilità
+                }
             }
 
-            let supplierBadge = '';
-            if (item.supplier) {
-                supplierBadge = '<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ' + item.supplier + (item.sku ? ' ['+item.sku+']' : '') + '</span>';
-            }
-            
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'item-row ' + (itemState.done ? 'done' : '');
-            
+            let typeBadge = item.type === 'magazzino' ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> SOGLIA: ${targetIdeal} ${item.uom || 'pz'}</span>` : '';
+            let supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${item.supplier}</span>` : '';
+            let expiryBadge = item.expiry ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:rgba(231,76,60,0.1); color:var(--danger);"><i class="fa-regular fa-clock"></i> SCAD: ${new Date(item.expiry).toLocaleDateString('it-IT')}</span>` : '';
+
             let controlsHtml = '';
-            
             if (item.type === 'magazzino') {
                 controlsHtml = `
                 <div class="item-controls">
                     <div style="display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:2px 4px;">
                         <button onclick="window.hf_stepQty('${stateKey}', -1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">-</button>
-                        <input type="number" class="qty-input" value="${itemState.n_op || ''}" placeholder="0" style="width:50px; text-align:center; border:none; background:none; color:var(--text-main); font-weight:700; font-size:1.1rem;" onchange="window.updateItemData('${stateKey}', 'n_op', this.value); window.renderApp();">
+                        <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="0" style="width:50px; text-align:center; border:none; background:none; color:var(--text-main); font-weight:700; font-size:1.1rem;" onchange="window.hf_updateQty('${stateKey}', this.value)">
                         <button onclick="window.hf_stepQty('${stateKey}', 1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">+</button>
                     </div>
                     <span class="unit-label" style="font-weight:700; color:var(--text-muted); min-width:30px;">${item.uom || 'pz'}</span>
@@ -294,79 +319,43 @@ function renderMainContent() {
                 controlsHtml = `
                 <div class="item-controls">
                     <div class="input-group-inline">
-                        <input type="number" class="qty-input" value="${itemState.n_op || ''}" placeholder="Qt." onchange="window.updateItemData('${stateKey}', 'n_op', this.value)">
+                        <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="Qt." onchange="window.hf_updateQty('${stateKey}', this.value)">
                         <span class="unit-label">${item.uom || 'pz'}</span>
                     </div>
                     <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">${checkboxHtml}</div>
                 </div>`;
             }
 
+            const itemDiv = document.createElement('div');
+            itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
             itemDiv.innerHTML = `
                 <div class="item-main">
                     <div class="item-name-group">
                         <span class="item-name">${item.name}</span>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge}</div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge} ${expiryBadge}</div>
                     </div>
                     ${controlsHtml}
                 </div>
                 <div class="item-sub" style="margin-top: 8px;">
-                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota di deficit..." onchange="window.updateItemData('${stateKey}', 'note', this.value)">
+                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa..." onchange="window.hf_updateNote('${stateKey}', this.value)">
                 </div>`;
 
             if (isAdmin) {
                 let pressTimer;
-                itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = window.setTimeout(() => window.hf_editItemModal(sectionId, item.id), 800); };
-                itemDiv.onmouseup = itemDiv.ontouchend = () => { clearTimeout(pressTimer); };
+                itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = setTimeout(() => window.hf_editItemModal(sectionId, item.id), 800); };
+                itemDiv.onmouseup = itemDiv.ontouchend = () => clearTimeout(pressTimer);
             }
 
             sectionDiv.appendChild(itemDiv);
         });
 
         if (isAdmin) {
-            const addItemBtn = document.createElement('button');
-            addItemBtn.className = 'btn-action';
-            addItemBtn.style.margin = '16px';
-            addItemBtn.style.width = 'calc(100% - 32px)';
-            addItemBtn.style.border = '1px dashed var(--border)';
-            addItemBtn.innerHTML = '<i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO';
-            addItemBtn.onclick = () => window.hf_openItemModal(sectionId);
-            sectionDiv.appendChild(addItemBtn);
+            sectionDiv.innerHTML += `<button class="btn-action" style="margin:16px; width:calc(100% - 32px); border:1px dashed var(--border);" onclick="window.hf_openItemModal('${sectionId}')"><i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO</button>`;
         }
-
         content.appendChild(sectionDiv);
     });
 
     if (isAdmin && !State.activeFilter) {
-        const addSectionBtn = document.createElement('button');
-        addSectionBtn.className = 'btn-action';
-        addSectionBtn.style.width = '100%';
-        addSectionBtn.style.marginTop = '24px';
-        addSectionBtn.style.border = '1px dashed var(--text-muted)';
-        addSectionBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA';
-        addSectionBtn.onclick = () => window.openSectionModal();
-        content.appendChild(addSectionBtn);
+        content.innerHTML += `<button class="btn-action" style="width:100%; margin-top:24px; border:1px dashed var(--text-muted);" onclick="window.openSectionModal()"><i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA</button>`;
     }
-}
-
-/**
- * ============================================================================
- * UTILITY STRUTTURALI CROMATICHE
- * ============================================================================
- */
-function getUniqueCategories(sedeId) {
-    if (!sedeId || !State.appStructure.sedi[sedeId]) return [];
-    const categoriesMap = new Map();
-    const folders = State.appStructure.sedi[sedeId].folders;
-    
-    Object.values(folders).forEach(folder => {
-        if (folder.sections) {
-            Object.values(folder.sections).forEach(section => {
-                if (!categoriesMap.has(section.name)) {
-                    categoriesMap.set(section.name, section.color);
-                }
-            });
-        }
-    });
-    
-    return Array.from(categoriesMap, ([name, color]) => ({ name, color }));
 }
