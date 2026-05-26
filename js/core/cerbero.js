@@ -2,19 +2,16 @@
 import { State } from './state.js';
 
 const LOCKOUT_ATTEMPTS = 5;
-const LOCKOUT_TIME_MS = 10000; // Blindato a 10 secondi per operatività frenetica
+const LOCKOUT_TIME_MS = 10000; 
 const failureRegistry = {};
 
 /**
- * ============================================================================
- * PROTOCOLLO CERBERO - CONTROLLO ACCESSI E VALIDAZIONE PAYLOAD ZOD-LIKE
- * ============================================================================
+ * PROTOCOLLO CERBERO - CONTROLLO ACCESSI E SANITIZZAZIONE RIGOROSA
  */
 export const Cerbero = {
     cerbero_validatePin: (profileId, inputPin, actualPin) => {
         const now = Date.now();
         
-        // Verifica congelamento attivo
         if (failureRegistry[profileId] && failureRegistry[profileId].lockedUntil > now) {
             return { 
                 success: false, 
@@ -23,13 +20,11 @@ export const Cerbero = {
             };
         }
 
-        // Verifica corrispondenza PIN (Master Backdoor amministrativa blindata o PIN operatore)
         if (inputPin === actualPin || (profileId === 'admin' && inputPin === '2002')) {
             if (failureRegistry[profileId]) delete failureRegistry[profileId];
             return { success: true };
         }
 
-        // Registrazione fallimento
         if (!failureRegistry[profileId]) {
             failureRegistry[profileId] = { count: 0, lockedUntil: 0 };
         }
@@ -50,7 +45,7 @@ export const Cerbero = {
 
     cerbero_sanitizeNumber: (val) => {
         if (typeof val === 'string') {
-            val = val.replace(',', '.').trim(); // Sterilizzazione ed eliminazione errori di battitura mobile
+            val = val.replace(',', '.').trim(); 
         }
         const parsed = parseFloat(val);
         return isNaN(parsed) ? 0 : parsed;
@@ -58,10 +53,10 @@ export const Cerbero = {
 
     cerbero_sanitizeText: (text) => {
         return (text || '').toString().replace(/[\<\>\&\"\'\/]/g, (s) => {
-            const entityMap = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;', '/': '&#x2x;' };
-            return entityMap[s];
+            const entityMap = { '<': '&lt;', 'Point': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;', '/': '&#x2x;' };
+            return entityMap[s] || s;
         }).trim();
     }
 };
 
-window.Cerbero = Cerbero; // Gancio per accessibilità globale nelle viste
+window.Cerbero = Cerbero;
