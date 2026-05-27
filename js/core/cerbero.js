@@ -1,67 +1,114 @@
 // File: js/core/cerbero.js
-import { State } from './state.js';
-
-const LOCKOUT_ATTEMPTS = 5;
-const LOCKOUT_TIME_MS = 10000; 
-const failureRegistry = {};
 
 /**
- * PROTOCOLLO CERBERO - CONTROLLO ACCESSI E SANITIZZAZIONE RIGOROSA
+ * CERBERO SECURITY ENGINE - SANITIZZAZIONE E CONTROLLO BRUTE-FORCE PERSISTENTE
  */
 export const Cerbero = {
-    cerbero_validatePin: (profileId, inputPin, actualPin) => {
-        const now = Date.now();
-        
-        if (failureRegistry[profileId] && failureRegistry[profileId].lockedUntil > now) {
-            return { 
-                success: false, 
-                reason: 'LOCKED', 
-                timeLeft: Math.ceil((failureRegistry[profileId].lockedUntil - now) / 1000) 
-            };
-        }
+    MAX_ATTEMPTS: 5,
+    LOCKOUT_TIME_SEC: 60, // 1 minuto di isolamento per saturazione tentativi
 
-        if (inputPin === actualPin || (profileId === 'admin' && inputPin === '2002')) {
-            if (failureRegistry[profileId]) delete failureRegistry[profileId];
-            return { success: true };
+    /**
+     * Recupera il registro dei fallimenti direttamente dal LocalStorage del dispositivo
+     */
+    _getRegistry() {
+        try {
+            const data = localStorage.getItem('scutum_cerbero_registry');
+            return data ? JSON.parse(data) : {};
+        } catch (e) {
+            return {};
         }
-
-        if (!failureRegistry[profileId]) {
-            failureRegistry[profileId] = { count: 0, lockedUntil: 0 };
-        }
-        failureRegistry[profileId].count++;
-
-        if (failureRegistry[profileId].count >= LOCKOUT_ATTEMPTS) {
-            failureRegistry[profileId].lockedUntil = now + LOCKOUT_TIME_MS;
-            failureRegistry[profileId].count = 0;
-            return { success: false, reason: 'LOCKOUT_TRIGGERED', timeLeft: 10 };
-        }
-
-        return { 
-            success: false, 
-            reason: 'WRONG_PIN', 
-            attemptsLeft: LOCKOUT_ATTEMPTS - failureRegistry[profileId].count 
-        };
     },
 
-    cerbero_sanitizeNumber: (val) => {
-        if (typeof val === 'string') {
-            val = val.replace(',', '.').trim(); 
+    /**
+     * Salva il registro dei fallimenti in modo persistente
+     */
+    _saveRegistry(registry) {
+        try {
+            localStorage.setItem('scutum_cerbero_registry', JSON.stringify(registry));
+        } catch (e) {
+            console.error("[CERBERO ERROR] Impossibile scrivere nel LocalStorage", e);
         }
-        const parsed = parseFloat(val);
+    },
+
+    /**
+     * Svuota i caratteri speciali per prevenire attacchi di iniezione di codice base
+     */
+    cerbero_sanitizeText(text) {
+        if (typeof text !== 'string') return '';
+        return text.replace(/[<>`"'\\]/g, '').trim();
+    },
+
+    /**
+     * Sgombra qualsiasi carattere non numerico o non decimale dagli input di quantità
+     */
+    cerbero_sanitizeNumber(value) {
+        if (value === null || value === undefined) return 0;
+        const stringValue = value.toString().replace(/,/g, '.');
+        const parsed = parseFloat(stringValue);
         return isNaN(parsed) ? 0 : parsed;
     },
 
-    cerbero_sanitizeText: (text) => {
-        if (!text) return '';
-        return text.toString()
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#x27;')
-            .replace(/\//g, '&#x2F;')
-            .trim();
+    /**
+     * Valida il PIN fornito verificando lo stato di Lockout persistente sul LocalStorage
+     */
+    cerbero_validatePin(profileId, inputPin, actualPin) {
+        const registry = this._getRegistry();
+        const now = Date.now();
+
+        // Inizializzazione record di sicurezza per il profilo specifico se inesistente
+        if (!registry[profileId]) {
+            registry[profileId] = { attempts: 0, lockoutUntil: 0 };
+        }
+
+        const profileRecord = registry[profileId];
+
+        // Caso Limite 1: Profilo attualmente in stato di Lockout attivo
+        if (profileRecord.lockoutUntil > now) {
+            const timeLeft = Math.ceil((profileRecord.lockoutUntil - now) / 1000);
+            return { success: false, reason: 'LOCKED', timeLeft: timeLeft };
+        }
+
+        // Caso Limite 2: Il tempo di Lockout è scaduto, reset automatico dei tentativi
+        if (profileRecord.lockoutUntil > 0 && profileRecord.lockoutUntil <= now) {
+            profileRecord.attempts = 0;
+            profileRecord.lockoutUntil = 0;
+            this._saveRegistry(registry);
+        }
+
+        // Sanitizzazione e confronto stringa del PIN immesso
+        const cleanInput = inputPin.toString().trim();
+        const cleanActual = actualPin.toString().trim();
+
+        if (cleanInput === cleanActual && cleanActual !== '') {
+            // Successo: Azzeramento definitivo dello storico fallimenti per l'utenza
+            profileRecord.attempts = 0;
+            profileRecord.lockoutUntil = 0;
+            this._saveRegistry(registry);
+            return { success: true };
+        } else {
+            // Fallimento: Incremento geometrico dei tentativi
+            profileRecord.attempts++;
+            
+            if (profileRecord.attempts >= this.MAX_ATTEMPTS) {
+                // Raggiungimento della soglia critica: calcolo e marcatura del timestamp di blocco
+                profileRecord.lockoutUntil = now + (this.LOCKOUT_TIME_SEC * 1000);
+                this._saveRegistry(registry);
+                return { 
+                    success: false, 
+                    reason: 'LOCKOUT_TRIGGERED', 
+                    timeLeft: this.LOCKOUT_TIME_SEC 
+                };
+            } else {
+                this._saveRegistry(registry);
+                return { 
+                    success: false, 
+                    reason: 'BAD_PIN', 
+                    attemptsLeft: this.MAX_ATTEMPTS - profileRecord.attempts 
+                };
+            }
+        }
     }
 };
 
+// Iniezione nello spazio globale per consentire l'interoperabilità asincrona con gli altri moduli UI
 window.Cerbero = Cerbero;
