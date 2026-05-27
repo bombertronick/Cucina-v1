@@ -1,105 +1,61 @@
 // File: js/app.js
+import { lazzaro_init } from './core/lazzaro.js';
 import { State } from './core/state.js';
-import { lazzaro_loadState, lazzaro_saveState } from './core/lazzaro.js';
-import './core/cerbero.js';
 import './ui/renderer.js';
 import './ui/nexus.js';
 
 /**
- * MOTORE FEEDBACK TATTILE E VISIVO (TOAST SYSTEM)
+ * BOOTLOADER PRINCIPALE - INIZIALIZZAZIONE SISTEMA E SICUREZZA
  */
-window.showToast = (msg, type = 'info') => {
-    const container = document.getElementById('toast-container');
-    if(!container) return;
-    const toast = document.createElement('div');
-    const bgColor = type === 'error' ? 'var(--danger)' : (type === 'success' ? 'var(--success)' : 'var(--accent)');
-    const textColor = type === 'success' ? '#000' : '#fff';
-    const icon = type === 'error' ? 'fa-triangle-exclamation' : (type === 'success' ? 'fa-check' : 'fa-circle-info');
-    
-    toast.style.cssText = `background:${bgColor}; color:${textColor}; padding:12px 20px; margin-bottom:10px; border-radius:8px; font-weight:800; font-size:0.9rem; display:flex; align-items:center; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5); transform:translateY(-20px); opacity:0; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);`;
-    toast.innerHTML = `<i class="fa-solid ${icon}"></i> ${msg}`;
-    
-    container.appendChild(toast);
-    
-    requestAnimationFrame(() => {
-        toast.style.transform = 'translateY(0)';
-        toast.style.opacity = '1';
-    });
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log("[BOOTLOADER] Avvio sequenza di innesco Scutum ERP V20...");
 
-    setTimeout(() => { 
-        toast.style.transform = 'translateY(-20px)';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300); 
-    }, 3000);
-};
-
-window.haptic = (ms = 15) => {
-    if (navigator.vibrate) navigator.vibrate(ms);
-};
-
-/**
- * LOGICHE GLOBALI (DISCONNESSIONE E COPY/PASTE TOPOLOGICO)
- */
-window.logout = () => {
-    if(!confirm("Effettuare la disconnessione dal profilo operativo?")) return;
-    State.activeProfile = null;
-    window.location.reload(); 
-};
-
-window.copySection = (sectionId) => {
-    State.clipboardSection = JSON.parse(JSON.stringify(State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId]));
-    window.showToast("Cella Logica copiata in memoria.", "info");
-    if(window.renderApp) window.renderApp();
-};
-
-window.pasteSection = async () => {
-    if (!State.clipboardSection || !State.activeSede || !State.activeFolder) return;
-    
-    const newId = 'sec_' + Date.now();
-    const clonedSection = JSON.parse(JSON.stringify(State.clipboardSection)); 
-    
-    if(clonedSection.items) {
-        clonedSection.items.forEach(item => {
-            item.id = 'itm_' + Math.random().toString(36).substr(2, 9);
-        });
-    }
-
-    State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[newId] = clonedSection;
-    State.clipboardSection = null; 
-    
-    window.showToast("Cella incollata e ricalcolata con successo.", "success");
-    if(window.renderApp) window.renderApp();
-    await lazzaro_saveState();
-};
-
-/**
- * BOOTSTRAPPER DI SISTEMA
- */
-async function initializeSystem() {
-    console.log("[SYSTEM] Inizializzazione protocolli Offline-First...");
-    
-    const dbLoaded = await lazzaro_loadState();
-    if (!dbLoaded) throw new Error("LocalForage Fallito.");
-
-    const loginSelect = document.getElementById('login-profile');
-    if (loginSelect) {
-        loginSelect.innerHTML = '<option value="admin">ROOT (AMMINISTRATORE)</option>';
-        
-        const bootSedeId = State.activeSede || Object.keys(State.appStructure.sedi)[0];
-        if (bootSedeId && State.appStructure.sedi[bootSedeId] && State.appStructure.sedi[bootSedeId].roles) {
-            State.appStructure.sedi[bootSedeId].roles.forEach(role => {
-                const opt = document.createElement('option');
-                opt.value = role.id;
-                opt.innerText = role.name.toUpperCase();
-                loginSelect.appendChild(opt);
-            });
+    // Registrazione Service Worker per cache offline e protocollo PWA
+    if ('serviceWorker' in navigator) {
+        try {
+            await navigator.serviceWorker.register('./sw.js');
+            console.log("[BOOTLOADER] Service Worker registrato e allineato.");
+        } catch (err) {
+            console.warn("[BOOTLOADER ERROR] Registrazione Service Worker fallita:", err);
         }
     }
 
-    const profileContainer = document.getElementById('login-profile-container');
-    if (profileContainer) profileContainer.style.display = 'block';
+    // Inizializzazione Motore di Persistenza (Database Quantico IndexedDB)
+    const dbReady = await lazzaro_init();
     
-    console.log("[SYSTEM] V20.2 Motore Operativo.");
-}
+    if (!dbReady) {
+        alert("ERRORE CRITICO: Database locale inaccessibile. L'app non può avviarsi.");
+        return;
+    }
 
-initializeSystem();
+    // Popolamento dinamico delle opzioni di login in base alla struttura caricata e alle squadre
+    const profileSelect = document.getElementById('login-profile');
+    if (profileSelect) {
+        profileSelect.innerHTML = '<option value="admin">ROOT (Amministratore)</option>';
+        
+        // Selettore profilato per la sede attiva di default
+        const defaultSedeId = State.activeSede || Object.keys(State.appStructure.sedi)[0];
+        if (defaultSedeId && State.appStructure.sedi[defaultSedeId]) {
+            const sede = State.appStructure.sedi[defaultSedeId];
+            if (sede.roles) {
+                sede.roles.forEach(role => {
+                    // Inclusione dinamica della taglia squadra nel nome a tendina
+                    const teamLabel = role.squadra ? ` [${role.squadra.toUpperCase()}]` : '';
+                    profileSelect.innerHTML += `<option value="${role.id}">${role.name.toUpperCase()}${teamLabel}</option>`;
+                });
+            }
+        }
+    }
+
+    // Sigillo di sicurezza: Esposizione forzata dell'interfaccia di Login e nascondimento App
+    const authScreen = document.getElementById('auth-screen');
+    const appWrapper = document.getElementById('app-wrapper');
+    
+    if (authScreen && appWrapper) {
+        appWrapper.style.display = 'none';
+        authScreen.style.display = 'flex';
+        authScreen.classList.add('active');
+    }
+
+    console.log("[BOOTLOADER] Sistema armato e pronto per l'autenticazione.");
+});
