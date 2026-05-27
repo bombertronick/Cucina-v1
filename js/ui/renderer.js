@@ -1,6 +1,6 @@
 // File: js/ui/renderer.js
-import { State } from '../core/state.js';
-import { Cerbero } from '../core/cerbero.js';
+const State = window.State;
+const Cerbero = window.Cerbero;
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
@@ -12,7 +12,7 @@ window.performLogin = () => {
     
     let actualPin = '';
     if (profileId === 'admin') {
-        actualPin = '2002'; // Hardcoded backdoor di sicurezza per Root
+        actualPin = '2002'; 
     } else {
         const sede = State.appStructure.sedi[State.activeSede || Object.keys(State.appStructure.sedi)[0]];
         const role = sede ? sede.roles.find(r => r.id === profileId) : null;
@@ -57,7 +57,7 @@ window.performLogin = () => {
 };
 
 /**
- * GESTIONE TEMA E OVERRIDE DI CARICO
+ * GESTIONE TEMA, CARICO E CONDIVISIONE (WEB SHARE API)
  */
 window.toggleTheme = async () => {
     State.currentTheme = State.currentTheme === 'dark' ? 'light' : 'dark';
@@ -72,8 +72,26 @@ window.togglePeakOverride = async () => {
     if(window.showToast) window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
 };
 
+window.shareApp = async () => {
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Scutum ERP V20',
+                text: 'Accedi al gestionale operativo Scutum ERP',
+                url: window.location.href
+            });
+            window.showToast("Link di condivisione generato.", "success");
+        } catch (err) {
+            console.log("Condivisione annullata.");
+        }
+    } else {
+        navigator.clipboard.writeText(window.location.href);
+        window.showToast("Link copiato negli appunti (Funzione Share non supportata dal browser).", "info");
+    }
+};
+
 /**
- * INPUT IBRIDO BRUTALISTA (STEPPER + TESTO) E MUTAZIONI ASINCRONE
+ * INPUT IBRIDO BRUTALISTA E MUTAZIONI ASINCRONE
  */
 window.hf_stepQty = (stateKey, amount) => {
     let current = Cerbero.cerbero_sanitizeNumber(State.appState[stateKey]?.n_op || '0');
@@ -113,8 +131,9 @@ window.switchSpaView = (viewId) => {
         target.classList.add('active');
     }
 };
+
 /**
- * RENDERER PRINCIPALE (SPOKE ENGINE E FATTORE UMANO)
+ * RENDERER PRINCIPALE (SPOKE ENGINE)
  */
 window.renderApp = () => {
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
@@ -165,7 +184,10 @@ function renderSidebar() {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
         div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
-        div.innerHTML = `<i class="fa-solid fa-shield"></i> ${sede.name}`;
+        
+        // Risoluzione Bug 1: Aggiunta icona matita esplicita per la modifica (no tap prolungato)
+        let editIcon = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:auto; color:var(--accent); padding:4px;" onclick="event.stopPropagation(); window.editSede('${sedeId}');"></i>` : '';
+        div.innerHTML = `<div style="display:flex; align-items:center; width:100%;"><i class="fa-solid fa-shield" style="margin-right:8px;"></i> ${sede.name} ${editIcon}</div>`;
         
         div.onclick = () => {
             State.activeSede = sedeId;
@@ -174,11 +196,6 @@ function renderSidebar() {
             window.renderApp();
             if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
         };
-        if (isAdmin) {
-            let pressTimer;
-            div.onmousedown = div.ontouchstart = () => { pressTimer = setTimeout(() => window.editSede(sedeId), 800); };
-            div.onmouseup = div.ontouchend = () => clearTimeout(pressTimer);
-        }
         sediMenu.appendChild(div);
     });
 
@@ -187,6 +204,9 @@ function renderSidebar() {
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--accent); border:1px solid rgba(201,164,100,0.3); background:rgba(201,164,100,0.05);" onclick="window.openOperatorListModal()"><i class="fa-solid fa-users"></i> GESTIONE OPERATORI</div>`;
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--nexus); border:1px solid rgba(155,89,182,0.3); background:rgba(155,89,182,0.05);" onclick="window.openCloudModal()"><i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT</div>`;
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--danger); border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.05);" onclick="window.togglePeakOverride()"><i class="fa-solid fa-fire"></i> ${State.peakOverride ? 'DISATTIVA ALTO CARICO' : 'FORZA ALTO CARICO (PEAK)'}</div>`;
+        
+        // Risoluzione Bug 5: Tasto condivisione
+        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--success); border:1px solid rgba(46, 204, 113, 0.3); background:rgba(46, 204, 113, 0.05);" onclick="window.shareApp()"><i class="fa-solid fa-share-nodes"></i> CONDIVIDI APP</div>`;
     }
 
     const filtersMenu = document.getElementById('categories-filter-menu');
@@ -213,13 +233,12 @@ function renderFolders() {
     Object.entries(State.appStructure.sedi[State.activeSede].folders).forEach(([folderId, folder]) => {
         const btn = document.createElement('button');
         btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
-        btn.innerText = folder.name;
+        
+        // Risoluzione Bug 1: Aggiunta icona matita per cartelle
+        let editIconHtml = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:8px; font-size:0.8rem; opacity:0.7;" onclick="event.stopPropagation(); window.editFolder('${folderId}');"></i>` : '';
+        btn.innerHTML = `${folder.name} ${editIconHtml}`;
+        
         btn.onclick = () => { State.activeFolder = folderId; State.activeFilter = null; window.renderApp(); };
-        if (isAdmin) {
-            let pressTimer;
-            btn.onmousedown = btn.ontouchstart = () => { pressTimer = setTimeout(() => window.editFolder(folderId), 800); };
-            btn.onmouseup = btn.ontouchend = () => clearTimeout(pressTimer);
-        }
         foldersMenu.appendChild(btn);
     });
 
@@ -253,14 +272,12 @@ function renderMainContent() {
 
         let itemsToRender = [...(section.items || [])];
         
-        // Risoluzione logica Time-Gating
         itemsToRender = itemsToRender.filter(item => {
             if (State.peakOverride) return true; 
             if (!item.days || item.days.length === 0) return true; 
             return item.days.includes(currentDay);
         });
 
-        // Ordinamento F.I.F.O. HACCP
         itemsToRender.sort((a, b) => {
             if (!a.expiry) return 1;
             if (!b.expiry) return -1;
@@ -318,23 +335,22 @@ function renderMainContent() {
 
             const itemDiv = document.createElement('div');
             itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
+            
+            // Risoluzione Bug 1: Aggiunta tasto modifica esplicito per ogni item
+            let itemEditBtn = isAdmin ? `<button style="background:none; border:none; color:var(--accent); margin-left:auto; padding:8px; cursor:pointer;" onclick="window.hf_editItemModal('${sectionId}', '${item.id}')"><i class="fa-solid fa-pen"></i></button>` : '';
+
             itemDiv.innerHTML = `
                 <div class="item-main">
-                    <div class="item-name-group">
+                    <div class="item-name-group" style="flex:1;">
                         <span class="item-name">${item.name}</span>
                         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge} ${expiryBadge}</div>
                     </div>
+                    ${itemEditBtn}
                     ${controlsHtml}
                 </div>
                 <div class="item-sub" style="margin-top: 8px;">
                     <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa..." onchange="window.hf_updateNote('${stateKey}', this.value)">
                 </div>`;
-
-            if (isAdmin) {
-                let pressTimer;
-                itemDiv.onmousedown = itemDiv.ontouchstart = () => { pressTimer = setTimeout(() => window.hf_editItemModal(sectionId, item.id), 800); };
-                itemDiv.onmouseup = itemDiv.ontouchend = () => clearTimeout(pressTimer);
-            }
 
             sectionDiv.appendChild(itemDiv);
         });
