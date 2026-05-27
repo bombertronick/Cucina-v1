@@ -1,6 +1,6 @@
 // File: js/ui/renderer.js
-const State = window.State;
-const Cerbero = window.Cerbero;
+import { State } from '../core/state.js';
+import { Cerbero } from '../core/cerbero.js';
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
