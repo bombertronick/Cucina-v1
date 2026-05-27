@@ -4,6 +4,9 @@ import { State } from './core/state.js';
 import './ui/renderer.js';
 import './ui/nexus.js';
 
+// FORZATURA ASSOLUTA: Il profilo ROOT è sempre il default all'avvio.
+window._selectedLoginProfile = 'admin';
+
 /**
  * BOOTLOADER PRINCIPALE - INIZIALIZZAZIONE SISTEMA E SICUREZZA
  */
@@ -25,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // Bypass sessione se già loggato
     const activeSession = sessionStorage.getItem('scutum_active_session');
     if (activeSession) {
         State.activeProfile = activeSession;
@@ -35,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // COSTRUTTORE MODALE LOGIN A MATRIOSKA
     const profileSelect = document.getElementById('login-profile');
     if (profileSelect) {
         profileSelect.style.display = 'none'; 
@@ -51,15 +56,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         let html = '';
         const defaultSedeId = State.activeSede || Object.keys(State.appStructure.sedi)[0];
 
-        // Profilo Root identificato da ID statico per auto-selezione
-        html += `<div class="matryoshka-op" id="matryoshka-admin" onclick="window.selectProfileMatryoshka('admin', this)" style="padding:14px; margin-bottom:12px; border:2px dashed var(--danger); border-radius:6px; font-weight:800; color:var(--danger); cursor:pointer; text-align:center; transition:all 0.2s;"><i class="fa-solid fa-user-shield"></i> ROOT (AMMINISTRATORE)</div>`;
-
-        let hasOperators = false;
+        // Profilo Root integrato con sfondo già attivo (auto-selected)
+        html += `<div class="matryoshka-op" id="matryoshka-admin" onclick="window.selectProfileMatryoshka('admin', this)" style="padding:14px; margin-bottom:12px; border:2px dashed var(--danger); border-radius:6px; font-weight:800; color:var(--danger); cursor:pointer; text-align:center; transition:all 0.2s; background:rgba(231,76,60,0.1);"><i class="fa-solid fa-user-shield"></i> ROOT (AMMINISTRATORE)</div>`;
 
         if (defaultSedeId && State.appStructure.sedi[defaultSedeId]) {
             const sede = State.appStructure.sedi[defaultSedeId];
             if (sede.roles && sede.roles.length > 0) {
-                hasOperators = true;
                 const teams = {};
                 sede.roles.forEach(role => {
                     const teamName = role.squadra ? role.squadra.toUpperCase() : 'SENZA REPARTO';
@@ -86,15 +88,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         container.innerHTML = html;
-
-        // PATCH STRUTTURALE PRIMO AVVIO: Auto-selezione visiva e logica se non esistono dipendenti
-        if (!hasOperators) {
-            window._selectedLoginProfile = 'admin';
-            setTimeout(() => {
-                const adminEl = document.getElementById('matryoshka-admin');
-                if (adminEl) adminEl.style.background = 'rgba(231,76,60,0.1)';
-            }, 50);
-        }
     }
 
     const authScreen = document.getElementById('auth-screen');
@@ -105,12 +98,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         authScreen.classList.add('active');
     }
 
-    console.log("[BOOTLOADER] Sistema armato e pronto per l'autenticazione a Matrioska.");
+    console.log("[BOOTLOADER] Sistema armato e pre-selezionato su ROOT.");
 });
 
 // === MOTORE LOGICO MATRIOSKA ===
-window._selectedLoginProfile = null;
-
 window.toggleMatryoshka = (teamId) => {
     const content = document.getElementById(`content-${teamId}`);
     const icon = document.getElementById(`icon-${teamId}`);
