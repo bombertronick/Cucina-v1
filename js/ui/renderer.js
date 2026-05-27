@@ -4,7 +4,7 @@ const Cerbero = window.Cerbero;
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
- * CONTROLLER ACCESSO (LOGIN A FISARMONICA & LOCKOUT)
+ * CONTROLLER ACCESSO (LOGIN A FISARMONICA & LOCKOUT BLINDATO)
  */
 window.performLogin = () => {
     const profileId = document.getElementById('login-profile').value;
@@ -36,16 +36,33 @@ window.performLogin = () => {
         document.getElementById('login-password').value = '';
         if (auth.reason === 'LOCKOUT_TRIGGERED' || auth.reason === 'LOCKED') {
             const lockoutMsg = document.getElementById('login-lockout-msg');
+            const btnLogin = document.getElementById('btn-login');
+            const selectProfile = document.getElementById('login-profile');
+            const inputPassword = document.getElementById('login-password');
+
+            // CONGELAMENTO ASSOLUTO INTERFACCIA (Previene le Race Condition)
+            if(btnLogin) { btnLogin.style.pointerEvents = 'none'; btnLogin.style.opacity = '0.5'; }
+            if(selectProfile) selectProfile.disabled = true;
+            if(inputPassword) inputPassword.disabled = true;
+
             lockoutMsg.style.display = 'block';
             document.getElementById('lockout-timer').innerText = auth.timeLeft;
             if(window.haptic) window.haptic([100, 50, 100]); 
             
+            // Distruzione preventiva di eventuali timer in esecuzione
+            if (window._cerberoLockInterval) clearInterval(window._cerberoLockInterval);
+            
             let timeLeft = auth.timeLeft;
-            const timerInterval = setInterval(() => {
+            window._cerberoLockInterval = setInterval(() => {
                 timeLeft--;
                 if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
+                    clearInterval(window._cerberoLockInterval);
                     lockoutMsg.style.display = 'none';
+                    
+                    // SBLOCCO INTERFACCIA
+                    if(btnLogin) { btnLogin.style.pointerEvents = 'auto'; btnLogin.style.opacity = '1'; }
+                    if(selectProfile) selectProfile.disabled = false;
+                    if(inputPassword) inputPassword.disabled = false;
                 } else {
                     document.getElementById('lockout-timer').innerText = timeLeft;
                 }
@@ -80,13 +97,13 @@ window.shareApp = async () => {
                 text: 'Accedi al gestionale operativo Scutum ERP',
                 url: window.location.href
             });
-            window.showToast("Link di condivisione generato.", "success");
+            if(window.showToast) window.showToast("Link di condivisione generato.", "success");
         } catch (err) {
             console.log("Condivisione annullata.");
         }
     } else {
         navigator.clipboard.writeText(window.location.href);
-        window.showToast("Link copiato negli appunti (Funzione Share non supportata dal browser).", "info");
+        if(window.showToast) window.showToast("Link copiato negli appunti (Funzione Share non supportata dal browser).", "info");
     }
 };
 
@@ -131,7 +148,6 @@ window.switchSpaView = (viewId) => {
         target.classList.add('active');
     }
 };
-
 /**
  * RENDERER PRINCIPALE (SPOKE ENGINE)
  */
@@ -185,8 +201,8 @@ function renderSidebar() {
         const div = document.createElement('div');
         div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
         
-        // Risoluzione Bug 1: Aggiunta icona matita esplicita per la modifica (no tap prolungato)
-        let editIcon = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:auto; color:var(--accent); padding:4px;" onclick="event.stopPropagation(); window.editSede('${sedeId}');"></i>` : '';
+        // Icona modifica esplicita e bypass tap prolungato
+        let editIcon = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:auto; color:var(--accent); padding:4px; font-size: 0.9rem;" onclick="event.stopPropagation(); window.editSede('${sedeId}');"></i>` : '';
         div.innerHTML = `<div style="display:flex; align-items:center; width:100%;"><i class="fa-solid fa-shield" style="margin-right:8px;"></i> ${sede.name} ${editIcon}</div>`;
         
         div.onclick = () => {
@@ -204,8 +220,6 @@ function renderSidebar() {
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--accent); border:1px solid rgba(201,164,100,0.3); background:rgba(201,164,100,0.05);" onclick="window.openOperatorListModal()"><i class="fa-solid fa-users"></i> GESTIONE OPERATORI</div>`;
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--nexus); border:1px solid rgba(155,89,182,0.3); background:rgba(155,89,182,0.05);" onclick="window.openCloudModal()"><i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT</div>`;
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--danger); border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.05);" onclick="window.togglePeakOverride()"><i class="fa-solid fa-fire"></i> ${State.peakOverride ? 'DISATTIVA ALTO CARICO' : 'FORZA ALTO CARICO (PEAK)'}</div>`;
-        
-        // Risoluzione Bug 5: Tasto condivisione
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--success); border:1px solid rgba(46, 204, 113, 0.3); background:rgba(46, 204, 113, 0.05);" onclick="window.shareApp()"><i class="fa-solid fa-share-nodes"></i> CONDIVIDI APP</div>`;
     }
 
@@ -234,7 +248,6 @@ function renderFolders() {
         const btn = document.createElement('button');
         btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
         
-        // Risoluzione Bug 1: Aggiunta icona matita per cartelle
         let editIconHtml = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:8px; font-size:0.8rem; opacity:0.7;" onclick="event.stopPropagation(); window.editFolder('${folderId}');"></i>` : '';
         btn.innerHTML = `${folder.name} ${editIconHtml}`;
         
@@ -336,7 +349,6 @@ function renderMainContent() {
             const itemDiv = document.createElement('div');
             itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
             
-            // Risoluzione Bug 1: Aggiunta tasto modifica esplicito per ogni item
             let itemEditBtn = isAdmin ? `<button style="background:none; border:none; color:var(--accent); margin-left:auto; padding:8px; cursor:pointer;" onclick="window.hf_editItemModal('${sectionId}', '${item.id}')"><i class="fa-solid fa-pen"></i></button>` : '';
 
             itemDiv.innerHTML = `
