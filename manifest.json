@@ -1,17 +1,24 @@
 {
-  "name": "Scutum ERP Absolute",
-  "short_name": "Scutum",
-  "description": "Matrice Logistica Omni-Reparto",
+  "name": "Scutum Logistic ERP",
+  "short_name": "Scutum ERP",
+  "description": "Sistema di Gestione Logistica e Matrice di Carico",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0D0907",
-  "theme_color": "#0D0907",
-  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/1162/1162528.png",
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
