@@ -1,10 +1,11 @@
 // File: js/app.js
 import { lazzaro_init } from './core/lazzaro.js';
 import { State } from './core/state.js';
+import './core/ledger.js';  // CABLAGGIO FONDAMENTALE DEL MOTORE TRANSAZIONALE
 import './ui/renderer.js';
 import './ui/nexus.js';
 
-// FORZATURA ASSOLUTA: Il profilo ROOT è sempre il default all'avvio.
+// FORZATURA ASSOLUTA: Il profilo ROOT è il default pre-selezionato all'avvio
 window._selectedLoginProfile = 'admin';
 
 /**
@@ -15,11 +16,11 @@ window._selectedLoginProfile = 'admin';
 let deferredPrompt;
 
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Previene il banner mini-infobar nativo di Chrome/Android
+    // Previene il banner nativo del browser per forzare il controllo dell'interfaccia
     e.preventDefault();
     deferredPrompt = e;
 
-    console.log("[PWA] Dispositivo idoneo. Iniettando popup di installazione...");
+    console.log("[PWA] Dispositivo idoneo all'installazione. Iniezione Bottom Sheet...");
 
     if (!document.getElementById('pwa-install-popup')) {
         const popupHTML = `
@@ -28,11 +29,11 @@ window.addEventListener('beforeinstallprompt', (e) => {
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
                     <h3 style="color:var(--accent); margin:0 0 6px 0; font-size:1.2rem; font-weight:800;"><i class="fa-solid fa-download"></i> INSTALLA SCUTUM ERP</h3>
-                    <p style="color:var(--text-main); font-size:0.85rem; margin:0; line-height:1.4;">Aggiungi l'app alla Schermata Home per l'accesso offline e la modalità a schermo intero.</p>
+                    <p style="color:var(--text-main); font-size:0.85rem; margin:0; line-height:1.4;">Aggiungi l'applicazione alla Schermata Home per abilitare l'autenticazione offline e la visualizzazione nativa.</p>
                 </div>
                 <button onclick="document.getElementById('pwa-install-popup').style.display='none'" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; font-weight:800; cursor:pointer; padding:0 0 0 16px;">&times;</button>
             </div>
-            <button id="btn-pwa-install" class="btn-action solid" style="background:var(--accent); color:#000; font-weight:800; padding:14px; font-size:1rem;"><i class="fa-solid fa-mobile-screen-button"></i> AGGIUNGI ALLA HOME</button>
+            <button id="btn-pwa-install" class="btn-action solid" style="background:var(--accent); color:#000; font-weight: 800; padding:14px; font-size:1rem;"><i class="fa-solid fa-mobile-screen-button"></i> AGGIUNGI ALLA HOME</button>
         </div>
         `;
         document.body.insertAdjacentHTML('beforeend', popupHTML);
@@ -43,7 +44,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                console.log(`[PWA] Esito interazione utente: ${outcome}`);
+                console.log(`[PWA] Scelta installazione utente: ${outcome}`);
                 deferredPrompt = null;
             }
         });
@@ -56,13 +57,13 @@ window.addEventListener('appinstalled', () => {
     const popup = document.getElementById('pwa-install-popup');
     if(popup) popup.style.display = 'none';
     deferredPrompt = null;
-    console.log('[PWA] Scutum ERP installata fisicamente sul dispositivo.');
-    if(window.showToast) window.showToast("App installata con successo!", "success");
+    console.log('[PWA] Scutum ERP configurata con successo come applicazione nativa.');
+    if(window.showToast) window.showToast("Applicazione installata con successo!", "success");
 });
 
 /**
  * ============================================================================
- * 2. BOOTLOADER PRINCIPALE - INIZIALIZZAZIONE SISTEMA E MATRIOSKA
+ * 2. BOOTLOADER PRINCIPALE - ASYNC ENGINE & STRUTTURA MATRIOSKA
  * ============================================================================
  */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -71,18 +72,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if ('serviceWorker' in navigator) {
         try {
             await navigator.serviceWorker.register('./sw.js');
-            console.log("[BOOTLOADER] Service Worker registrato e allineato.");
+            console.log("[BOOTLOADER] Service Worker allineato alla rete.");
         } catch (err) {
-            console.warn("[BOOTLOADER ERROR] Registrazione Service Worker fallita:", err);
+            console.warn("[BOOTLOADER ERROR] Inizializzazione Service Worker fallita:", err);
         }
     }
 
+    // Inizializzazione del database locale (IndexedDB via localForage)
     const dbReady = await lazzaro_init();
     if (!dbReady) {
-        alert("ERRORE CRITICO: Database locale inaccessibile. L'app non può avviarsi.");
+        alert("ERRORE INTERNO: Impossibile mappare lo strato di persistenza locale.");
         return;
     }
 
+    // Controllo e ripristino istantaneo della sessione attiva (Anti-Refresh)
     const activeSession = sessionStorage.getItem('scutum_active_session');
     if (activeSession) {
         State.activeProfile = activeSession;
@@ -93,6 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // Costruzione dinamica dell'interfaccia ad isolamento gerarchico
     const profileSelect = document.getElementById('login-profile');
     if (profileSelect) {
         profileSelect.style.display = 'none'; 
@@ -108,12 +112,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         let html = '';
         const defaultSedeId = State.activeSede || Object.keys(State.appStructure.sedi)[0];
 
+        // BLOCCO 1: Volta di autenticazione amministrativa isolata (ROOT)
         html += `
         <div id="root-auth-vault" style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px dashed var(--border);">
             <div style="font-size: 0.7rem; color: var(--danger); font-weight: 800; letter-spacing: 1.5px; margin-bottom: 10px; text-transform: uppercase;"><i class="fa-solid fa-unlock-keyhole"></i> Autenticazione Direzione Generale</div>
             <div class="matryoshka-op" id="matryoshka-admin" onclick="window.selectProfileMatryoshka('admin', this)" style="padding:16px; border:2px dashed var(--danger); border-radius:8px; font-weight:800; color:var(--danger); cursor:pointer; text-align:center; transition:all 0.2s; background:rgba(231,76,60,0.12);"><i class="fa-solid fa-user-shield"></i> TERMINALE ROOT (ADMIN)</div>
         </div>`;
 
+        // BLOCCO 2: Albero dei reparti logistici operativi (Matrioska)
         html += `
         <div id="operators-auth-vault">
             <div style="font-size: 0.7rem; color: var(--accent); font-weight: 800; letter-spacing: 1.5px; margin-bottom: 12px; text-transform: uppercase;"><i class="fa-solid fa-network-wired"></i> Selezione Squadre e Personale Rete</div>`;
@@ -126,12 +132,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 hasOperators = true;
                 const teams = {};
                 
+                // Raggruppamento indenne da collisioni per stringa squadra
                 sede.roles.forEach(role => {
                     const teamName = role.squadra ? role.squadra.toUpperCase() : 'SENZA REPARTO';
                     if (!teams[teamName]) teams[teamName] = [];
                     teams[teamName].push(role);
                 });
 
+                // Rendering degli accordion indipendenti
                 Object.keys(teams).forEach(team => {
                     const safeTeamId = btoa(team).replace(/[^a-zA-Z0-9]/g, '');
                     html += `
@@ -152,7 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (!hasOperators) {
-            html += `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px; border:1px dashed var(--border); border-radius:6px; background:rgba(0,0,0,0.15);">Nessun profilo rete rilevato. Effettuare il login come ROOT per configurare la matrice logistica della Sede.</div>`;
+            html += `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px; border:1px dashed var(--border); border-radius:6px; background:rgba(0,0,0,0.15);">Nessun profilo operatore configurato. Accedere come ROOT per mappare le matrici logistiche della Sede.</div>`;
         }
 
         html += `</div>`; 
@@ -169,9 +177,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         authScreen.style.display = 'flex';
         authScreen.classList.add('active');
     }
+    
+    console.log("[BOOTLOADER] Sistema armato e pre-selezionato su account ROOT.");
 });
 
-// === MOTORE LOGICO DI INTERAZIONE MATRIOSKA ===
+/**
+ * ============================================================================
+ * 3. INTERACTION ENGINE - GESTIONE EVENTI ACCORDION E SELEZIONE PROFILI
+ * ============================================================================
+ */
 window.toggleMatryoshka = (teamId) => {
     const content = document.getElementById(`content-${teamId}`);
     const icon = document.getElementById(`icon-${teamId}`);
@@ -190,6 +204,7 @@ window.selectProfileMatryoshka = (profileId, element) => {
     window._selectedLoginProfile = profileId;
     const passInput = document.getElementById('login-password');
     
+    // Reset totale degli asset grafici di selezione precedenti
     document.querySelectorAll('.matryoshka-op').forEach(el => {
         if (el.id === 'matryoshka-admin') {
             el.style.background = 'rgba(231,76,60,0.05)';
@@ -202,6 +217,7 @@ window.selectProfileMatryoshka = (profileId, element) => {
         }
     });
 
+    // Allocazione dinamica del focus e aggiornamento placeholder
     if (profileId === 'admin') {
         if (element) {
             element.style.background = 'rgba(231,76,60,0.15)';
