@@ -139,7 +139,7 @@ window.hf_exportWhatsApp = () => {
 
 /**
  * ============================================================================
- * 2. COMPILATORE MODALE CRUD AVANZATO PRODOTTI (ITEM CON IDEALE DINAMICO)
+ * 2. COMPILATORE MODALE CRUD AVANZATO PRODOTTI
  * ============================================================================
  */
 function hf_injectItemModal() {
@@ -300,24 +300,25 @@ window.lazzaro_deleteItem = async () => {
 };
 /**
  * ============================================================================
- * 3. GESTIONE OPERATORI (CON LINK ESTERNI) E KILL SWITCH
+ * 3. GESTIONE OPERATORI (CON LIVELLO SQUADRE REPARTO) E KILL SWITCH
  * ============================================================================
  */
 function injectOperatorModals() {
     if (document.getElementById('modal-operator-list')) return;
     const modalHTML = `
     <div id="modal-operator-list" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-        <div class="modal-box">
-            <h2 style="margin-bottom: 24px; color: var(--accent);"><i class="fa-solid fa-users"></i> DIPENDENTI SEDE</h2>
-            <div id="operator-list-container" style="margin-bottom: 24px; max-height: 40vh; overflow-y: auto;"></div>
+        <div class="modal-box" style="max-height: 90vh; overflow-y: auto;">
+            <h2 style="margin-bottom: 24px; color: var(--accent); font-weight:800;"><i class="fa-solid fa-users"></i> DIPENDENTI E SQUADRE</h2>
+            <div id="operator-list-container" style="margin-bottom: 24px; max-height: 45vh; overflow-y: auto;"></div>
             <button class="btn-action" style="margin-bottom: 16px; border: 1px dashed var(--border);" onclick="window.openOperatorDetailModal()"><i class="fa-solid fa-plus"></i> AGGIUNGI OPERATORE</button>
             <button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO</button>
         </div>
     </div>
     <div id="modal-operator-detail" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
         <div class="modal-box">
-            <h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent);">SCHEDA OPERATORE</h2>
+            <h2 id="op-modal-title" style="margin-bottom: 24px; color: var(--accent); font-weight:800;">SCHEDA OPERATORE</h2>
             <div class="input-group"><label>Nome Visualizzato</label><input type="text" id="input-op-name" placeholder="Es. Mario Rossi"></div>
+            <div class="input-group"><label>Squadra / Reparto Personalizzato</label><input type="text" id="input-op-squadra" placeholder="Es. Squadra Fritti / Cucina / Grill"></div>
             <div class="input-group"><label>PIN di Accesso (Solo Numeri)</label><input type="number" pattern="[0-9]*" inputmode="numeric" id="input-op-pin" placeholder="Es. 1234"></div>
             <div class="input-group"><label>URL Checklist Apertura</label><input type="url" id="input-op-apertura" placeholder="https://..."></div>
             <div class="input-group"><label>URL Checklist Chiusura</label><input type="url" id="input-op-chiusura" placeholder="https://..."></div>
@@ -345,7 +346,8 @@ window.openOperatorListModal = () => {
         sede.roles.forEach(op => { 
             const div = document.createElement('div'); 
             div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.2); border-radius:8px; margin-bottom:8px;"; 
-            div.innerHTML = `<div><div style="font-weight:700;">${op.name}</div><div style="font-size:0.8rem; color:var(--text-muted);">PIN: ${op.pin}</div></div><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--accent); padding:8px;" onclick="window.openOperatorDetailModal('${op.id}')"></i>`; 
+            let squadBadge = op.squadra ? `<span style="font-size:0.7rem; background:var(--accent); color:#000; padding:2px 6px; border-radius:4px; font-weight:800; text-transform:uppercase; margin-left:8px;">${op.squadra}</span>` : '';
+            div.innerHTML = `<div><div style="font-weight:700; display:flex; align-items:center;">${op.name} ${squadBadge}</div><div style="font-size:0.8rem; color:var(--text-muted);">PIN: ${op.pin}</div></div><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--accent); padding:8px;" onclick="window.openOperatorDetailModal('${op.id}')"></i>`; 
             container.appendChild(div); 
         }); 
     } 
@@ -360,16 +362,19 @@ window.openOperatorDetailModal = (opId = null) => {
     document.getElementById('op-modal-title').innerText = opId ? 'MODIFICA PROFILO OPERATIVO' : 'NUOVO OPERATORE RETE';
     
     const inputName = document.getElementById('input-op-name');
+    const inputSquadra = document.getElementById('input-op-squadra');
     const inputPin = document.getElementById('input-op-pin');
 
     if (opId) {
         const op = State.appStructure.sedi[State.activeSede].roles.find(r => r.id === opId);
-        inputName.value = op.name; inputPin.value = op.pin;
+        inputName.value = op.name || '';
+        inputSquadra.value = op.squadra || '';
+        inputPin.value = op.pin || '';
         document.getElementById('input-op-apertura').value = op.linkApertura || '';
         document.getElementById('input-op-chiusura').value = op.linkChiusura || '';
         document.getElementById('btn-delete-op').style.display = 'block';
     } else {
-        inputName.value = ''; inputPin.value = '';
+        inputName.value = ''; inputSquadra.value = ''; inputPin.value = '';
         document.getElementById('input-op-apertura').value = ''; document.getElementById('input-op-chiusura').value = '';
         document.getElementById('btn-delete-op').style.display = 'none';
     }
@@ -378,6 +383,7 @@ window.openOperatorDetailModal = (opId = null) => {
 
 window.saveOperatorLogic = async () => {
     const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-op-name').value);
+    const squadra = Cerbero.cerbero_sanitizeText(document.getElementById('input-op-squadra').value);
     const pin = document.getElementById('input-op-pin').value.trim();
     const linkApertura = document.getElementById('input-op-apertura').value.trim();
     const linkChiusura = document.getElementById('input-op-chiusura').value.trim();
@@ -386,7 +392,10 @@ window.saveOperatorLogic = async () => {
     const sede = State.appStructure.sedi[State.activeSede];
     if (window._editContext.isNew && sede.roles.some(r => r.pin === pin)) return alert("PIN già assegnato.");
 
-    const payload = { id: window._editContext.isNew ? 'op_' + Date.now() : window._editContext.id, name, pin, linkApertura, linkChiusura };
+    const payload = { 
+        id: window._editContext.isNew ? 'op_' + Date.now() : window._editContext.id, 
+        name, squadra, pin, linkApertura, linkChiusura 
+    };
 
     if (window._editContext.isNew) sede.roles.push(payload);
     else { const idx = sede.roles.findIndex(r => r.id === window._editContext.id); if (idx !== -1) sede.roles[idx] = payload; }
@@ -410,7 +419,7 @@ window.nukeCurrentTurnLogic = async () => {
 
 /**
  * ============================================================================
- * 4. STRUTTURA E GERARCHIA (CRUD SEDI, TURNI, CELLE LOGICHE)
+ * 4. STRUTTURA E GERARCHIA DINAMICA (COLORE E CATEGORIE LIBERE)
  * ============================================================================
  */
 function injectStructuralModals() {
@@ -418,13 +427,31 @@ function injectStructuralModals() {
     if (!layer) return;
 
     if (!document.getElementById('modal-sede')) {
-        layer.insertAdjacentHTML('beforeend', '<div id="modal-sede" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="sede-modal-title" style="margin-bottom: 24px; color: var(--accent);">RETE LOGISTICA</h2><div class="input-group"><label>Nome Sede</label><input type="text" id="input-sede-name" placeholder="Es. Fiumicino"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-sede" onclick="window.deleteSedeLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSedeLogic()">SALVA</button></div></div></div>');
+        layer.insertAdjacentHTML('beforeend', `<div id="modal-sede" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="sede-modal-title" style="margin-bottom: 24px; color: var(--accent); font-weight:800;">RETE LOGISTICA</h2><div class="input-group"><label>Nome Sede</label><input type="text" id="input-sede-name" placeholder="Es. Fiumicino"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-sede" onclick="window.deleteSedeLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSedeLogic()">SALVA</button></div></div></div>`);
     }
     if (!document.getElementById('modal-folder')) {
-        layer.insertAdjacentHTML('beforeend', '<div id="modal-folder" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="folder-modal-title" style="margin-bottom: 24px; color: var(--accent);">TURNO OPERATIVO</h2><div class="input-group"><label>Nome Turno</label><input type="text" id="input-folder-name" placeholder="Es. Mattina"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-folder" onclick="window.deleteFolderLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveFolderLogic()">SALVA</button></div></div></div>');
+        layer.insertAdjacentHTML('beforeend', `<div id="modal-folder" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="folder-modal-title" style="margin-bottom: 24px; color: var(--accent); font-weight:800;">TURNO OPERATIVO</h2><div class="input-group"><label>Nome Turno</label><input type="text" id="input-folder-name" placeholder="Es. Mattina"></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-folder" onclick="window.deleteFolderLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveFolderLogic()">SALVA</button></div></div></div>`);
     }
     if (!document.getElementById('modal-section')) {
-        layer.insertAdjacentHTML('beforeend', '<div id="modal-section" class="modal-overlay" onclick="if(event.target===this) window.closeModals();"><div class="modal-box"><h2 id="section-modal-title" style="margin-bottom: 24px; color: var(--accent);">CELLA LOGICA</h2><div class="input-group" style="margin-bottom: 16px;"><label>Nome Cella</label><input type="text" id="input-section-name" placeholder="Es. Frigo Carni"></div><div class="input-group"><label>Linea (Colore)</label><select id="input-section-color"><option value="#3498db" style="color:#3498db;">LINEA BLU (STANDARD)</option><option value="#2ecc71" style="color:#2ecc71;">LINEA VERDE (FRESCHI)</option><option value="#e74c3c" style="color:#e74c3c;">LINEA ROSSA (CARNI/FRITTI)</option><option value="#9b59b6" style="color:#9b59b6;">LINEA VIOLA (PANIFICAZIONE)</option><option value="#f1c40f" style="color:#f1c40f;">LINEA GIALLA (DRY GOODS)</option></select></div><div style="display: flex; gap: 16px; margin-top: auto;"><button class="btn-action" onclick="window.closeModals();">ANNULLA</button><button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-section" onclick="window.deleteSectionLogic()"><i class="fa-solid fa-trash"></i></button><button class="btn-action solid" onclick="window.saveSectionLogic()">SALVA</button></div></div></div>');
+        layer.insertAdjacentHTML('beforeend', `
+        <div id="modal-section" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
+            <div class="modal-box">
+                <h2 id="section-modal-title" style="margin-bottom: 24px; color: var(--accent); font-weight:800;">CELLA LOGICA REPARTO</h2>
+                <div class="input-group" style="margin-bottom: 16px;">
+                    <label>Nome Cella Logica (Categoria Libera)</label>
+                    <input type="text" id="input-section-name" placeholder="Es. Frigo Carni / Squadra Fritti">
+                </div>
+                <div class="input-group">
+                    <label>Colore Identificativo Linea</label>
+                    <input type="color" id="input-section-color" value="#3498db" style="width:100%; height:44px; padding:0; border:1px solid var(--border); background:none; cursor:pointer; border-radius:6px;">
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: auto;">
+                    <button class="btn-action" onclick="window.closeModals();">ANNULLA</button>
+                    <button class="btn-action solid" style="background:var(--danger); display:none;" id="btn-delete-section" onclick="window.deleteSectionLogic()"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn-action solid" onclick="window.saveSectionLogic()">SALVA CELLA</button>
+                </div>
+            </div>
+        </div>`);
     }
 }
 
@@ -438,39 +465,119 @@ window.editFolder = (folderId) => { injectStructuralModals(); window._editContex
 window.saveFolderLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-folder-name').value); if (!name || !State.activeSede) return; if (!window._editContext.isNew) { State.appStructure.sedi[State.activeSede].folders[window._editContext.id].name = name; } else { const newId = 'fold_' + Date.now(); State.appStructure.sedi[State.activeSede].folders[newId] = { name: name, sections: {} }; State.activeFolder = newId; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
 window.deleteFolderLogic = async () => { if (!confirm("Vuoi eliminare questo Turno e tutte le sue celle?")) return; window.lazzaro_purgeGhosts(State.activeSede + '_' + window._editContext.id + '_'); delete State.appStructure.sedi[State.activeSede].folders[window._editContext.id]; if (State.activeFolder === window._editContext.id) State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
 
-window.openSectionModal = () => { injectStructuralModals(); window._editContext = { type: 'section', isNew: true }; document.getElementById('section-modal-title').innerText = 'NUOVA CELLA LOGICA'; document.getElementById('input-section-name').value = ''; document.getElementById('btn-delete-section').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
+window.openSectionModal = () => { injectStructuralModals(); window._editContext = { type: 'section', isNew: true }; document.getElementById('section-modal-title').innerText = 'CREA CELLA LOGICA LIBERA'; document.getElementById('input-section-name').value = ''; document.getElementById('input-section-color').value = '#3498db'; document.getElementById('btn-delete-section').style.display = 'none'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
 window.editSection = (sectionId) => { injectStructuralModals(); window._editContext = { type: 'section', id: sectionId, isNew: false }; document.getElementById('section-modal-title').innerText = 'MODIFICA CELLA LOGICA'; const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId]; document.getElementById('input-section-name').value = sec.name; document.getElementById('input-section-color').value = sec.color; document.getElementById('btn-delete-section').style.display = 'block'; document.getElementById('modal-layer').style.display = 'flex'; document.getElementById('modal-section').style.display = 'flex'; };
 window.saveSectionLogic = async () => { const name = Cerbero.cerbero_sanitizeText(document.getElementById('input-section-name').value); const color = document.getElementById('input-section-color').value; if (!name || !State.activeSede || !State.activeFolder) return; if (!window._editContext.isNew) { const sec = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; sec.name = name; sec.color = color; } else { const newId = 'sec_' + Date.now(); State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[newId] = { name: name, color: color, items: [] }; } window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
 window.deleteSectionLogic = async () => { if (!confirm("Vuoi eliminare questa Cella Logica e tutti i prodotti al suo interno?")) return; delete State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[window._editContext.id]; window.closeModals(); window.renderApp(); await lazzaro_saveState(); };
 
 /**
- * CONTAINER CLOUD MODAL (BYPASS QUANTICO GITHUB GISTS EDITION)
+ * ============================================================================
+ * 5. MACCHINA DEL TEMPO INTERNA (AUTOMATED MEMORY VAULT SYSTEM)
+ * ============================================================================
+ */
+window.saveInternalSnapshot = async () => {
+    try {
+        const snapshots = await localforage.getItem('internalSnapshots') || [];
+        const newSnapshot = {
+            id: 'snap_' + Date.now(),
+            dateStr: new Date().toLocaleString('it-IT'),
+            appStructure: JSON.parse(JSON.stringify(State.appStructure)),
+            appState: JSON.parse(JSON.stringify(State.appState))
+        };
+        snapshots.unshift(newSnapshot);
+        if (snapshots.length > 8) snapshots.pop(); // Mantiene gli ultimi 8 punti di ripristino per ottimizzazione spazio
+        await localforage.setItem('internalSnapshots', snapshots);
+        if(window.showToast) window.showToast("Snapshot interno sigillato in memoria profonda.", "success");
+        window.loadInternalSnapshotList();
+    } catch (err) {
+        if(window.showToast) window.showToast("Errore di scrittura nella Macchina del Tempo.", "error");
+    }
+};
+
+window.loadInternalSnapshotList = async () => {
+    const container = document.getElementById('internal-snapshots-container');
+    if (!container) return;
+    container.innerHTML = '';
+    try {
+        const snapshots = await localforage.getItem('internalSnapshots') || [];
+        if (snapshots.length === 0) {
+            container.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted); text-align:center; padding:12px; border:1px dashed var(--border); border-radius:6px;">Nessun punto di ripristino rilevato. Clicca su "SCATTA SNAPSHOT".</div>';
+            return;
+        }
+        snapshots.forEach(snap => {
+            const div = document.createElement('div');
+            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02); margin-bottom:8px; border-radius:6px;";
+            div.innerHTML = `
+                <div style="font-size:0.85rem; font-weight:700;"><i class="fa-solid fa-clock-rotate-left" style="color:var(--accent); margin-right:6px;"></i> ${snap.dateStr}</div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-action solid" style="padding:4px 10px; font-size:0.75rem; background:var(--success); color:#000; width:auto;" onclick="window.restoreInternalSnapshot('${snap.id}')">RIPRISTINA</button>
+                    <button class="btn-action" style="padding:4px 8px; font-size:0.75rem; border-color:var(--danger); color:var(--danger); width:auto;" onclick="window.deleteInternalSnapshot('${snap.id}')"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    } catch (err) {
+        container.innerHTML = '<div style="color:var(--danger); font-size:0.8rem;">Errore di scansione IndexedDB.</div>';
+    }
+};
+
+window.restoreInternalSnapshot = async (id) => {
+    if(!confirm("ATTENZIONE: Ripristinare questo punto temporale? I dati attuali non salvati andranno sovrascritti.")) return;
+    try {
+        const snapshots = await localforage.getItem('internalSnapshots') || [];
+        const target = snapshots.find(s => s.id === id);
+        if (target) {
+            State.appStructure = target.appStructure;
+            State.appState = target.appState;
+            await lazzaro_saveState();
+            if(window.showToast) window.showToast("Linea temporale riallineata. Riavvio in corso...", "success");
+            setTimeout(() => window.location.reload(), 1000);
+        }
+    } catch (err) {
+        alert("Errore critico durante il ripristino.");
+    }
+};
+
+window.deleteInternalSnapshot = async (id) => {
+    try {
+        let snapshots = await localforage.getItem('internalSnapshots') || [];
+        snapshots = snapshots.filter(s => s.id !== id);
+        await localforage.setItem('internalSnapshots', snapshots);
+        window.loadInternalSnapshotList();
+        if(window.showToast) window.showToast("Punto di ripristino rimosso.", "info");
+    } catch (err) {
+        console.error(err);
+    }
+};
+
+/**
+ * CONTAINER CLOUD MODAL (GITHUB GISTS & MACCHINA DEL TEMPO INTERNAL VIEW)
  */
 window.openCloudModal = () => {
     if (document.getElementById('modal-cloud-vault')) {
         document.getElementById('modal-layer').style.display = 'flex';
         document.getElementById('modal-cloud-vault').style.display = 'flex';
+        window.loadInternalSnapshotList();
         return;
     }
     const html = `
     <div id="modal-cloud-vault" class="modal-overlay" onclick="if(event.target===this) window.closeModals();">
-        <div class="modal-box">
+        <div class="modal-box" style="max-height:90vh; overflow-y:auto; width:100%; max-width:500px;">
             <h2 style="margin-bottom: 20px; color: var(--nexus); font-weight:800;"><i class="fa-solid fa-cloud-arrow-up"></i> GITHUB GIST CLOUD VAULT</h2>
             <div class="input-group"><label>GitHub Personal Access Token (PAT)</label><input type="password" id="input-cloud-key"></div>
             <div class="input-group"><label>Gist ID Corrente</label><input type="text" id="input-cloud-bin"></div>
-            <div style="display:flex; gap:12px; margin-bottom:16px;">
+            <div style="display:flex; gap:12px; margin-bottom:24px;">
                 <button class="btn-action" style="border-color:var(--success); color:var(--success);" onclick="window.syncPullCloud()"><i class="fa-solid fa-cloud-arrow-down"></i> PULL GLOBAL</button>
                 <button class="btn-action solid" style="background:var(--nexus);" onclick="window.syncPushCloud()"><i class="fa-solid fa-cloud-arrow-up"></i> PUSH STRUCTURE</button>
             </div>
             <div style="border-top:1px dashed var(--border); padding-top:16px; margin-bottom:16px;">
-                <div style="font-weight:800; color:var(--accent); font-size:0.75rem; margin-bottom:8px;">MACCHINA DEL TEMPO (LOCAL SNAPSHOT)</div>
-                <div style="display:flex; gap:12px;">
-                    <button class="btn-action" onclick="window.exportLocalBackup()"><i class="fa-solid fa-file-arrow-down"></i> EXPORT</button>
-                    <button class="btn-action" onclick="document.getElementById('backup-file-picker').click()"><i class="fa-solid fa-file-arrow-up"></i> IMPORT</button>
-                    <input type="file" id="backup-file-picker" style="display:none;" onchange="window.importLocalBackup(event)">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="font-weight:800; color:var(--accent); font-size:0.85rem;"><i class="fa-solid fa-timeline"></i> MACCHINA DEL TEMPO AUTONOMA</div>
+                    <button class="btn-action solid" style="width:auto; padding:6px 12px; font-size:0.75rem; background:var(--accent); color:#000;" onclick="window.saveInternalSnapshot()">SCATTA SNAPSHOT</button>
                 </div>
+                <div id="internal-snapshots-container" style="max-height:200px; overflow-y:auto; padding-right:4px;"></div>
             </div>
-            <button class="btn-action solid" onclick="window.closeModals();">CHIUDI VAULT</button>
+            <button class="btn-action solid" onclick="window.closeModals();">CHIUDI PANNELLO CENTRALIZZATO</button>
         </div>
     </div>`;
     document.getElementById('modal-layer').insertAdjacentHTML('beforeend', html);
@@ -479,4 +586,5 @@ window.openCloudModal = () => {
     document.getElementById('input-cloud-bin').value = localStorage.getItem('nexus_bin_id') || '';
     document.getElementById('modal-layer').style.display = 'flex';
     document.getElementById('modal-cloud-vault').style.display = 'flex';
+    window.loadInternalSnapshotList();
 };
