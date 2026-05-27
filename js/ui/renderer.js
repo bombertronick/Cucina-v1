@@ -4,10 +4,18 @@ import { Cerbero } from '../core/cerbero.js';
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
- * CONTROLLER ACCESSO (LOGIN A FISARMONICA & LOCKOUT BLINDATO)
+ * CONTROLLER ACCESSO (LOGIN MATRIOSKA, LOCKOUT E SESSIONE)
  */
 window.performLogin = () => {
-    const profileId = document.getElementById('login-profile').value;
+    // 1. Lettura dal nuovo sistema Matrioska
+    const profileId = window._selectedLoginProfile;
+    
+    if (!profileId) {
+        if(window.showToast) window.showToast("Seleziona il tuo Profilo/Reparto prima di inserire il PIN.", "error");
+        else alert("Seleziona il tuo Profilo/Reparto prima di inserire il PIN.");
+        return;
+    }
+
     const pinInput = document.getElementById('login-password').value;
     
     let actualPin = '';
@@ -23,6 +31,10 @@ window.performLogin = () => {
 
     if (auth.success) {
         State.activeProfile = profileId;
+        
+        // 2. Registrazione Sessione Persistente (Anti-Refresh)
+        sessionStorage.setItem('scutum_active_session', profileId);
+        
         document.getElementById('login-password').value = '';
         document.getElementById('login-lockout-msg').style.display = 'none';
         
@@ -37,19 +49,16 @@ window.performLogin = () => {
         if (auth.reason === 'LOCKOUT_TRIGGERED' || auth.reason === 'LOCKED') {
             const lockoutMsg = document.getElementById('login-lockout-msg');
             const btnLogin = document.getElementById('btn-login');
-            const selectProfile = document.getElementById('login-profile');
             const inputPassword = document.getElementById('login-password');
 
-            // CONGELAMENTO ASSOLUTO INTERFACCIA (Previene le Race Condition)
+            // Congelamento interfaccia anti-Race Condition
             if(btnLogin) { btnLogin.style.pointerEvents = 'none'; btnLogin.style.opacity = '0.5'; }
-            if(selectProfile) selectProfile.disabled = true;
             if(inputPassword) inputPassword.disabled = true;
 
             lockoutMsg.style.display = 'block';
             document.getElementById('lockout-timer').innerText = auth.timeLeft;
             if(window.haptic) window.haptic([100, 50, 100]); 
             
-            // Distruzione preventiva di eventuali timer in esecuzione
             if (window._cerberoLockInterval) clearInterval(window._cerberoLockInterval);
             
             let timeLeft = auth.timeLeft;
@@ -59,9 +68,7 @@ window.performLogin = () => {
                     clearInterval(window._cerberoLockInterval);
                     lockoutMsg.style.display = 'none';
                     
-                    // SBLOCCO INTERFACCIA
                     if(btnLogin) { btnLogin.style.pointerEvents = 'auto'; btnLogin.style.opacity = '1'; }
-                    if(selectProfile) selectProfile.disabled = false;
                     if(inputPassword) inputPassword.disabled = false;
                 } else {
                     document.getElementById('lockout-timer').innerText = timeLeft;
@@ -71,6 +78,21 @@ window.performLogin = () => {
             if(window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
         }
     }
+};
+
+/**
+ * CONTROLLER DISCONNESSIONE (DISTRUZIONE SESSIONE)
+ */
+window.performLogout = () => {
+    if (!confirm("Sei sicuro di voler chiudere la sessione operativa?")) return;
+    
+    // Purga della sessione volatile
+    sessionStorage.removeItem('scutum_active_session');
+    window._selectedLoginProfile = null;
+    State.activeProfile = null;
+    
+    // Riavvio forzato del bootloader per ristabilire i blocchi di sicurezza
+    window.location.reload(true);
 };
 
 /**
@@ -103,7 +125,7 @@ window.shareApp = async () => {
         }
     } else {
         navigator.clipboard.writeText(window.location.href);
-        if(window.showToast) window.showToast("Link copiato negli appunti (Funzione Share non supportata dal browser).", "info");
+        if(window.showToast) window.showToast("Link copiato negli appunti.", "info");
     }
 };
 
@@ -172,17 +194,19 @@ function applyRolePermissions() {
     if (userLabel) userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
 
     const checklistContainer = document.getElementById('spoke-checklists-container');
-    checklistContainer.innerHTML = '';
-    if (profile && (profile.linkApertura || profile.linkChiusura)) {
-        checklistContainer.style.display = 'flex';
-        if (profile.linkApertura) {
-            checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--success); color:#000; font-weight:800;" onclick="window.open('${profile.linkApertura}', '_blank')"><i class="fa-solid fa-sun"></i> CHECKLIST APERTURA</button>`;
+    if(checklistContainer) {
+        checklistContainer.innerHTML = '';
+        if (profile && (profile.linkApertura || profile.linkChiusura)) {
+            checklistContainer.style.display = 'flex';
+            if (profile.linkApertura) {
+                checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--success); color:#000; font-weight:800;" onclick="window.open('${profile.linkApertura}', '_blank')"><i class="fa-solid fa-sun"></i> CHECKLIST APERTURA</button>`;
+            }
+            if (profile.linkChiusura) {
+                checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--danger); color:#fff; font-weight:800;" onclick="window.open('${profile.linkChiusura}', '_blank')"><i class="fa-solid fa-moon"></i> CHECKLIST CHIUSURA</button>`;
+            }
+        } else {
+            checklistContainer.style.display = 'none';
         }
-        if (profile.linkChiusura) {
-            checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--danger); color:#fff; font-weight:800;" onclick="window.open('${profile.linkChiusura}', '_blank')"><i class="fa-solid fa-moon"></i> CHECKLIST CHIUSURA</button>`;
-        }
-    } else {
-        checklistContainer.style.display = 'none';
     }
 
     const pasteBtn = document.getElementById('floating-paste-btn');
@@ -194,6 +218,7 @@ function applyRolePermissions() {
 function renderSidebar() {
     const sediMenu = document.getElementById('sedi-menu');
     const isAdmin = State.activeProfile === 'admin';
+    if(!sediMenu) return;
     sediMenu.innerHTML = '';
 
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
@@ -201,7 +226,6 @@ function renderSidebar() {
         const div = document.createElement('div');
         div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
         
-        // Icona modifica esplicita e bypass tap prolungato
         let editIcon = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:auto; color:var(--accent); padding:4px; font-size: 0.9rem;" onclick="event.stopPropagation(); window.editSede('${sedeId}');"></i>` : '';
         div.innerHTML = `<div style="display:flex; align-items:center; width:100%;"><i class="fa-solid fa-shield" style="margin-right:8px;"></i> ${sede.name} ${editIcon}</div>`;
         
@@ -210,7 +234,10 @@ function renderSidebar() {
             State.activeFolder = Object.keys(sede.folders)[0] || null;
             State.activeFilter = null; 
             window.renderApp();
-            if(window.innerWidth <= 768) document.getElementById('main-sidebar').classList.remove('open');
+            if(window.innerWidth <= 768) {
+                const sidebar = document.getElementById('main-sidebar');
+                if(sidebar) sidebar.classList.remove('open');
+            }
         };
         sediMenu.appendChild(div);
     });
@@ -223,23 +250,29 @@ function renderSidebar() {
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--success); border:1px solid rgba(46, 204, 113, 0.3); background:rgba(46, 204, 113, 0.05);" onclick="window.shareApp()"><i class="fa-solid fa-share-nodes"></i> CONDIVIDI APP</div>`;
     }
 
+    // TASTO DISCONNETTI (Iniettato dinamicamente per tutti i profili)
+    sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--danger); border:1px dashed var(--danger); background:rgba(231,76,60,0.1);" onclick="window.performLogout()"><i class="fa-solid fa-right-from-bracket"></i> DISCONNETTI</div>`;
+
     const filtersMenu = document.getElementById('categories-filter-menu');
-    filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
-    
-    if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
-        const catMap = new Map();
-        Object.values(State.appStructure.sedi[State.activeSede].folders).forEach(f => {
-            if(f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
-        });
-        catMap.forEach((color, name) => {
-            filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${name}</div>`;
-        });
+    if(filtersMenu) {
+        filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
+        
+        if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
+            const catMap = new Map();
+            Object.values(State.appStructure.sedi[State.activeSede].folders).forEach(f => {
+                if(f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
+            });
+            catMap.forEach((color, name) => {
+                filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${name}</div>`;
+            });
+        }
     }
 }
 
 function renderFolders() {
     const foldersMenu = document.getElementById('folders-menu');
     const isAdmin = State.activeProfile === 'admin';
+    if(!foldersMenu) return;
     foldersMenu.innerHTML = '';
 
     if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) return;
@@ -264,6 +297,7 @@ function renderMainContent() {
     const content = document.getElementById('main-content');
     const headerTitle = document.getElementById('header-title');
     const isAdmin = State.activeProfile === 'admin';
+    if(!content || !headerTitle) return;
     content.innerHTML = '';
 
     if (!State.activeSede || !State.activeFolder) {
