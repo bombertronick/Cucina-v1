@@ -4,14 +4,15 @@ import { Cerbero } from '../core/cerbero.js';
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
- * CONTROLLER ACCESSO (LOGIN MATRIOSKA, LOCKOUT E SESSIONE)
+ * ============================================================================
+ * 1. CONTROLLER ACCESSO (LOGIN MATRIOSKA, LOCKOUT E PERSISTENZA)
+ * ============================================================================
  */
 window.performLogin = () => {
-    // 1. Lettura dal nuovo sistema Matrioska
     const profileId = window._selectedLoginProfile;
     
     if (!profileId) {
-        if(window.showToast) window.showToast("Seleziona il tuo Profilo/Reparto prima di inserire il PIN.", "error");
+        if (window.showToast) window.showToast("Seleziona il tuo Profilo/Reparto prima di inserire il PIN.", "error");
         else alert("Seleziona il tuo Profilo/Reparto prima di inserire il PIN.");
         return;
     }
@@ -32,7 +33,7 @@ window.performLogin = () => {
     if (auth.success) {
         State.activeProfile = profileId;
         
-        // 2. Registrazione Sessione Persistente (Anti-Refresh)
+        // Sigillo di sessione volatile per immunizzare l'app dal refresh
         sessionStorage.setItem('scutum_active_session', profileId);
         
         document.getElementById('login-password').value = '';
@@ -51,13 +52,12 @@ window.performLogin = () => {
             const btnLogin = document.getElementById('btn-login');
             const inputPassword = document.getElementById('login-password');
 
-            // Congelamento interfaccia anti-Race Condition
-            if(btnLogin) { btnLogin.style.pointerEvents = 'none'; btnLogin.style.opacity = '0.5'; }
-            if(inputPassword) inputPassword.disabled = true;
+            if (btnLogin) { btnLogin.style.pointerEvents = 'none'; btnLogin.style.opacity = '0.5'; }
+            if (inputPassword) inputPassword.disabled = true;
 
             lockoutMsg.style.display = 'block';
             document.getElementById('lockout-timer').innerText = auth.timeLeft;
-            if(window.haptic) window.haptic([100, 50, 100]); 
+            if (window.haptic) window.haptic([100, 50, 100]); 
             
             if (window._cerberoLockInterval) clearInterval(window._cerberoLockInterval);
             
@@ -67,36 +67,36 @@ window.performLogin = () => {
                 if (timeLeft <= 0) {
                     clearInterval(window._cerberoLockInterval);
                     lockoutMsg.style.display = 'none';
-                    
-                    if(btnLogin) { btnLogin.style.pointerEvents = 'auto'; btnLogin.style.opacity = '1'; }
-                    if(inputPassword) inputPassword.disabled = false;
+                    if (btnLogin) { btnLogin.style.pointerEvents = 'auto'; btnLogin.style.opacity = '1'; }
+                    if (inputPassword) inputPassword.disabled = false;
                 } else {
                     document.getElementById('lockout-timer').innerText = timeLeft;
                 }
             }, 1000);
         } else {
-            if(window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
+            if (window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
+            else alert(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`);
         }
     }
 };
 
 /**
- * CONTROLLER DISCONNESSIONE (DISTRUZIONE SESSIONE)
+ * CONTROLLER DISCONNESSIONE (DISTRUZIONE TIMEOUT E FLUSH AGENT)
  */
 window.performLogout = () => {
     if (!confirm("Sei sicuro di voler chiudere la sessione operativa?")) return;
     
-    // Purga della sessione volatile
     sessionStorage.removeItem('scutum_active_session');
     window._selectedLoginProfile = null;
     State.activeProfile = null;
     
-    // Riavvio forzato del bootloader per ristabilire i blocchi di sicurezza
     window.location.reload(true);
 };
 
 /**
- * GESTIONE TEMA, CARICO E CONDIVISIONE (WEB SHARE API)
+ * ============================================================================
+ * 2. UTILITY DI SISTEMA, SUPPORTO CARICO E PEAK OVERRIDE
+ * ============================================================================
  */
 window.toggleTheme = async () => {
     State.currentTheme = State.currentTheme === 'dark' ? 'light' : 'dark';
@@ -108,7 +108,7 @@ window.togglePeakOverride = async () => {
     State.peakOverride = !State.peakOverride;
     await lazzaro_saveState();
     window.renderApp();
-    if(window.showToast) window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
+    if (window.showToast) window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
 };
 
 window.shareApp = async () => {
@@ -119,18 +119,20 @@ window.shareApp = async () => {
                 text: 'Accedi al gestionale operativo Scutum ERP',
                 url: window.location.href
             });
-            if(window.showToast) window.showToast("Link di condivisione generato.", "success");
+            if (window.showToast) window.showToast("Link di condivisione generato.", "success");
         } catch (err) {
             console.log("Condivisione annullata.");
         }
     } else {
         navigator.clipboard.writeText(window.location.href);
-        if(window.showToast) window.showToast("Link copiato negli appunti.", "info");
+        if (window.showToast) window.showToast("Link copiato negli appunti.", "info");
     }
 };
 
 /**
- * INPUT IBRIDO BRUTALISTA E MUTAZIONI ASINCRONE
+ * ============================================================================
+ * 3. STRATO TRANSAZIONALE OPERATIVO (INPUT MUTATORS)
+ * ============================================================================
  */
 window.hf_stepQty = (stateKey, amount) => {
     let current = Cerbero.cerbero_sanitizeNumber(State.appState[stateKey]?.n_op || '0');
@@ -171,12 +173,21 @@ window.switchSpaView = (viewId) => {
     }
 };
 /**
- * RENDERER PRINCIPALE (SPOKE ENGINE)
+ * ============================================================================
+ * 4. RENDERER PRINCIPALE (SPOKE ENGINE CON PATCH ANTI-AMNESIA)
+ * ============================================================================
  */
 window.renderApp = () => {
+    // 1. Auto-Recovery della Sede
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
+    
+    // 2. PATCH: Auto-Recovery del Turno Operativo (Previene schermata vuota al refresh)
+    if (State.activeSede && !State.activeFolder && State.appStructure.sedi[State.activeSede].folders) {
+        State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null;
+    }
+
     document.documentElement.setAttribute('data-theme', State.currentTheme || 'dark');
     
     applyRolePermissions();
@@ -250,7 +261,6 @@ function renderSidebar() {
         sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--success); border:1px solid rgba(46, 204, 113, 0.3); background:rgba(46, 204, 113, 0.05);" onclick="window.shareApp()"><i class="fa-solid fa-share-nodes"></i> CONDIVIDI APP</div>`;
     }
 
-    // TASTO DISCONNETTI (Iniettato dinamicamente per tutti i profili)
     sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--danger); border:1px dashed var(--danger); background:rgba(231,76,60,0.1);" onclick="window.performLogout()"><i class="fa-solid fa-right-from-bracket"></i> DISCONNETTI</div>`;
 
     const filtersMenu = document.getElementById('categories-filter-menu');
