@@ -16,6 +16,7 @@ window._selectedLoginProfile = 'admin';
 let deferredPrompt;
 
 window.addEventListener('beforeinstallprompt', (e) => {
+    // Previene il banner nativo del browser per forzare il controllo dell'interfaccia
     e.preventDefault();
     deferredPrompt = e;
 
@@ -23,7 +24,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
     if (!document.getElementById('pwa-install-popup')) {
         const popupHTML = `
-        <div id="pwa-install-popup" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); width:90%; max-width:400px; background:var(--bg); border:2px solid var(--accent); border-radius:12px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; gap:16px; animation: slideUp 0.4s ease-out;">
+        <div id="pwa-install-popup" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); width:90%; max-width:400px; background:var(--surface); border:2px solid var(--accent); border-radius:12px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; gap:16px; animation: slideUp 0.4s ease-out;">
             <style>@keyframes slideUp { from { bottom: -100px; opacity: 0; } to { bottom: 24px; opacity: 1; } }</style>
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
@@ -39,7 +40,9 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
         document.getElementById('btn-pwa-install').addEventListener('click', async () => {
             const popup = document.getElementById('pwa-install-popup');
-            if (popup) popup.style.display = 'none';
+            if (popup) {
+                popup.style.display = 'none';
+            }
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
@@ -54,10 +57,82 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 window.addEventListener('appinstalled', () => {
     const popup = document.getElementById('pwa-install-popup');
-    if (popup) popup.style.display = 'none';
+    if (popup) {
+        popup.style.display = 'none';
+    }
     deferredPrompt = null;
     console.log('[PWA] Scutum ERP configurata con successo come applicazione nativa.');
-    if (window.showToast) window.showToast("Applicazione installata con successo!", "success");
+    if (window.showToast) {
+        window.showToast("Applicazione installata con successo!", "success");
+    }
+});
+// File: js/app.js
+import { lazzaro_init } from './core/lazzaro.js';
+import { State } from './core/state.js';
+import './core/ledger.js';
+import './ui/renderer.js';
+import './ui/nexus.js';
+
+// FORZATURA ASSOLUTA: Il profilo ROOT è il default pre-selezionato all'avvio
+window._selectedLoginProfile = 'admin';
+
+/**
+ * ============================================================================
+ * 1. PWA INSTALL ENGINE (CATTURA EVENTO E INIEZIONE POPUP)
+ * ============================================================================
+ */
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Previene il banner nativo del browser per forzare il controllo dell'interfaccia
+    e.preventDefault();
+    deferredPrompt = e;
+
+    console.log("[PWA] Dispositivo idoneo all'installazione. Iniezione Bottom Sheet...");
+
+    if (!document.getElementById('pwa-install-popup')) {
+        const popupHTML = `
+        <div id="pwa-install-popup" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); width:90%; max-width:400px; background:var(--surface); border:2px solid var(--accent); border-radius:12px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; gap:16px; animation: slideUp 0.4s ease-out;">
+            <style>@keyframes slideUp { from { bottom: -100px; opacity: 0; } to { bottom: 24px; opacity: 1; } }</style>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <h3 style="color:var(--accent); margin:0 0 6px 0; font-size:1.2rem; font-weight:800;"><i class="fa-solid fa-download"></i> INSTALLA SCUTUM ERP</h3>
+                    <p style="color:var(--text-main); font-size:0.85rem; margin:0; line-height:1.4;">Aggiungi l'applicazione alla Schermata Home per abilitare l'autenticazione offline e la visualizzazione nativa.</p>
+                </div>
+                <button onclick="document.getElementById('pwa-install-popup').style.display='none'" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; font-weight:800; cursor:pointer; padding:0 0 0 16px;">&times;</button>
+            </div>
+            <button id="btn-pwa-install" class="btn-action solid" style="background:var(--accent); color:#000; font-weight: 800; padding:14px; font-size:1rem;"><i class="fa-solid fa-mobile-screen-button"></i> AGGIUNGI ALLA HOME</button>
+        </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', popupHTML);
+
+        document.getElementById('btn-pwa-install').addEventListener('click', async () => {
+            const popup = document.getElementById('pwa-install-popup');
+            if (popup) {
+                popup.style.display = 'none';
+            }
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`[PWA] Scelta installazione utente: ${outcome}`);
+                deferredPrompt = null;
+            }
+        });
+    } else {
+        document.getElementById('pwa-install-popup').style.display = 'flex';
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    const popup = document.getElementById('pwa-install-popup');
+    if (popup) {
+        popup.style.display = 'none';
+    }
+    deferredPrompt = null;
+    console.log('[PWA] Scutum ERP configurata con successo come applicazione nativa.');
+    if (window.showToast) {
+        window.showToast("Applicazione installata con successo!", "success");
+    }
 });
 /**
  * ============================================================================
