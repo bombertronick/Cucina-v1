@@ -5,21 +5,18 @@ import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
 
 /**
  * ============================================================================
- * 1. CONTROLLER ACCESSO (LOGIN CON HARD-BYPASS ROOT)
+ * 1. CONTROLLER ACCESSO (LOGIN MATRIOSKA CON HARD-BYPASS ROOT)
  * ============================================================================
  */
 window.performLogin = () => {
     console.log("[AUTH] Sequenza di innesco avviata...");
     
-    // Fallback di sicurezza: assume ROOT se la UI fallisce l'aggancio
     const profileId = window._selectedLoginProfile || 'admin';
     const pinInput = document.getElementById('login-password').value;
 
     console.log(`[AUTH] Verifica credenziali per: ${profileId}`);
 
-    // =========================================================
-    // HARD-BYPASS ROOT (Sovrascrittura di Sicurezza Assoluta)
-    // =========================================================
+    // HARD-BYPASS ROOT (Sovrascrittura di Sicurezza Assoluta per emergenze DB)
     if (profileId === 'admin' && pinInput === '2002') {
         console.log("[AUTH] Master Override accettato. Accesso ROOT.");
         State.activeProfile = 'admin';
@@ -33,12 +30,9 @@ window.performLogin = () => {
         document.getElementById('app-wrapper').classList.add('active');
         
         window.renderApp();
-        return; // Bypass completo del motore Cerbero
+        return; 
     }
 
-    // =========================================================
-    // FLUSSO OPERATORI STANDARD (Tramite Motore Cerbero)
-    // =========================================================
     if (!profileId) {
         if (window.showToast) window.showToast("Seleziona il Profilo prima di inserire il PIN.", "error");
         else alert("Seleziona il Profilo prima di inserire il PIN.");
@@ -186,12 +180,12 @@ window.switchSpaView = (viewId) => {
  * ============================================================================
  */
 window.renderApp = () => {
-    // 1. Auto-Recovery della Sede
+    // 1. Auto-Recovery della Sede Operativa attiva
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
     
-    // 2. PATCH: Auto-Recovery del Turno Operativo (Previene schermata vuota al refresh)
+    // 2. Auto-Recovery del Turno Operativo (Previene schermi vuoti post-refresh)
     if (State.activeSede && !State.activeFolder && State.appStructure.sedi[State.activeSede].folders) {
         State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null;
     }
@@ -213,7 +207,7 @@ function applyRolePermissions() {
     if (userLabel) userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
 
     const checklistContainer = document.getElementById('spoke-checklists-container');
-    if(checklistContainer) {
+    if (checklistContainer) {
         checklistContainer.innerHTML = '';
         if (profile && (profile.linkApertura || profile.linkChiusura)) {
             checklistContainer.style.display = 'flex';
@@ -237,7 +231,7 @@ function applyRolePermissions() {
 function renderSidebar() {
     const sediMenu = document.getElementById('sedi-menu');
     const isAdmin = State.activeProfile === 'admin';
-    if(!sediMenu) return;
+    if (!sediMenu) return;
     sediMenu.innerHTML = '';
 
     Object.keys(State.appStructure.sedi).forEach(sedeId => {
@@ -246,16 +240,16 @@ function renderSidebar() {
         div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
         
         let editIcon = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:auto; color:var(--accent); padding:4px; font-size: 0.9rem;" onclick="event.stopPropagation(); window.editSede('${sedeId}');"></i>` : '';
-        div.innerHTML = `<div style="display:flex; align-items:center; width:100%;"><i class="fa-solid fa-shield" style="margin-right:8px;"></i> ${sede.name} ${editIcon}</div>`;
+        div.innerHTML = `<div style="display:flex; align-items:center; width:100%;"><i class="fa-solid fa-shield" style="margin-right:8px;"></i> ${decayHTML(sede.name)} ${editIcon}</div>`;
         
         div.onclick = () => {
             State.activeSede = sedeId;
             State.activeFolder = Object.keys(sede.folders)[0] || null;
             State.activeFilter = null; 
             window.renderApp();
-            if(window.innerWidth <= 768) {
+            if (window.innerWidth <= 768) {
                 const sidebar = document.getElementById('main-sidebar');
-                if(sidebar) sidebar.classList.remove('open');
+                if (sidebar) sidebar.classList.remove('open');
             }
         };
         sediMenu.appendChild(div);
@@ -272,16 +266,16 @@ function renderSidebar() {
     sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--danger); border:1px dashed var(--danger); background:rgba(231,76,60,0.1);" onclick="window.performLogout()"><i class="fa-solid fa-right-from-bracket"></i> DISCONNETTI</div>`;
 
     const filtersMenu = document.getElementById('categories-filter-menu');
-    if(filtersMenu) {
+    if (filtersMenu) {
         filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
         
         if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
             const catMap = new Map();
             Object.values(State.appStructure.sedi[State.activeSede].folders).forEach(f => {
-                if(f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
+                if (f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
             });
             catMap.forEach((color, name) => {
-                filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${name}</div>`;
+                filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${decayHTML(name)}</div>`;
             });
         }
     }
@@ -290,7 +284,7 @@ function renderSidebar() {
 function renderFolders() {
     const foldersMenu = document.getElementById('folders-menu');
     const isAdmin = State.activeProfile === 'admin';
-    if(!foldersMenu) return;
+    if (!foldersMenu) return;
     foldersMenu.innerHTML = '';
 
     if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) return;
@@ -300,7 +294,7 @@ function renderFolders() {
         btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
         
         let editIconHtml = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:8px; font-size:0.8rem; opacity:0.7;" onclick="event.stopPropagation(); window.editFolder('${folderId}');"></i>` : '';
-        btn.innerHTML = `${folder.name} ${editIconHtml}`;
+        btn.innerHTML = `${decayHTML(folder.name)} ${editIconHtml}`;
         
         btn.onclick = () => { State.activeFolder = folderId; State.activeFilter = null; window.renderApp(); };
         foldersMenu.appendChild(btn);
@@ -315,7 +309,7 @@ function renderMainContent() {
     const content = document.getElementById('main-content');
     const headerTitle = document.getElementById('header-title');
     const isAdmin = State.activeProfile === 'admin';
-    if(!content || !headerTitle) return;
+    if (!content || !headerTitle) return;
     content.innerHTML = '';
 
     if (!State.activeSede || !State.activeFolder) {
@@ -327,7 +321,7 @@ function renderMainContent() {
     const folderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
     
     let killSwitchHtml = isAdmin ? `<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET TURNO</button>` : '';
-    headerTitle.innerHTML = `${sedeName} // ${folderName} ${killSwitchHtml}`;
+    headerTitle.innerHTML = `${decayHTML(sedeName)} // ${decayHTML(folderName)} ${killSwitchHtml}`;
 
     const currentDay = new Date().getDay(); 
     const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
@@ -337,12 +331,14 @@ function renderMainContent() {
 
         let itemsToRender = [...(section.items || [])];
         
+        // Algoritmo di filtraggio dei giorni (Bypassato se Peak Override è attivo)
         itemsToRender = itemsToRender.filter(item => {
             if (State.peakOverride) return true; 
             if (!item.days || item.days.length === 0) return true; 
             return item.days.includes(currentDay);
         });
 
+        // Ordinamento asincrono FIFO basato sulla data di scadenza ravvicinata
         itemsToRender.sort((a, b) => {
             if (!a.expiry) return 1;
             if (!b.expiry) return -1;
@@ -356,7 +352,7 @@ function renderMainContent() {
         sectionDiv.style.borderTop = `4px solid ${section.color}`;
         
         let adminActions = isAdmin ? `<div style="display:flex; gap:16px;"><i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection('${sectionId}')"></i><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection('${sectionId}')"></i></div>` : '';
-        sectionDiv.innerHTML = `<div class="section-header"><h3 style="color:${section.color}; text-transform:uppercase; letter-spacing:1px; margin:0;">${section.name}</h3>${adminActions}</div>`;
+        sectionDiv.innerHTML = `<div class="section-header"><h3 style="color:${section.color}; text-transform:uppercase; letter-spacing:1px; margin:0;">${decayHTML(section.name)}</h3>${adminActions}</div>`;
 
         itemsToRender.forEach(item => {
             const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
@@ -371,8 +367,8 @@ function renderMainContent() {
                 }
             }
 
-            let typeBadge = item.type === 'magazzino' ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> SOGLIA: ${targetIdeal} ${item.uom || 'pz'}</span>` : '';
-            let supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${item.supplier}</span>` : '';
+            let typeBadge = item.type === 'magazzino' ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> SOGLIA: ${targetIdeal} ${decayHTML(item.uom || 'pz')}</span>` : '';
+            let supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${decayHTML(item.supplier)}</span>` : '';
             let expiryBadge = item.expiry ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:rgba(231,76,60,0.1); color:var(--danger);"><i class="fa-regular fa-clock"></i> SCAD: ${new Date(item.expiry).toLocaleDateString('it-IT')}</span>` : '';
 
             let controlsHtml = '';
@@ -384,7 +380,7 @@ function renderMainContent() {
                         <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="0" style="width:50px; text-align:center; border:none; background:none; color:var(--text-main); font-weight:700; font-size:1.1rem;" onchange="window.hf_updateQty('${stateKey}', this.value)">
                         <button onclick="window.hf_stepQty('${stateKey}', 1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">+</button>
                     </div>
-                    <span class="unit-label" style="font-weight:700; color:var(--text-muted); min-width:30px;">${item.uom || 'pz'}</span>
+                    <span class="unit-label" style="font-weight:700; color:var(--text-muted); min-width:30px;">${decayHTML(item.uom || 'pz')}</span>
                 </div>`;
             } else {
                 let checkboxHtml = itemState.done ? '<i class="fa-solid fa-check"></i>' : '';
@@ -392,7 +388,7 @@ function renderMainContent() {
                 <div class="item-controls">
                     <div class="input-group-inline">
                         <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="Qt." onchange="window.hf_updateQty('${stateKey}', this.value)">
-                        <span class="unit-label">${item.uom || 'pz'}</span>
+                        <span class="unit-label">${decayHTML(item.uom || 'pz')}</span>
                     </div>
                     <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">${checkboxHtml}</div>
                 </div>`;
@@ -406,14 +402,14 @@ function renderMainContent() {
             itemDiv.innerHTML = `
                 <div class="item-main">
                     <div class="item-name-group" style="flex:1;">
-                        <span class="item-name">${item.name}</span>
+                        <span class="item-name">${decayHTML(item.name)}</span>
                         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge} ${expiryBadge}</div>
                     </div>
                     ${itemEditBtn}
                     ${controlsHtml}
                 </div>
                 <div class="item-sub" style="margin-top: 8px;">
-                    <input type="text" class="note-input" value="${itemState.note || ''}" placeholder="Aggiungi nota operativa..." onchange="window.hf_updateNote('${stateKey}', this.value)">
+                    <input type="text" class="note-input" value="${decayHTML(itemState.note || '')}" placeholder="Aggiungi nota operativa..." onchange="window.hf_updateNote('${stateKey}', this.value)">
                 </div>`;
 
             sectionDiv.appendChild(itemDiv);
@@ -428,4 +424,16 @@ function renderMainContent() {
     if (isAdmin && !State.activeFilter) {
         content.innerHTML += `<button class="btn-action" style="width:100%; margin-top:24px; border:1px dashed var(--text-muted);" onclick="window.openSectionModal()"><i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA</button>`;
     }
+}
+
+/**
+ * SANITIZZATORE ANTI-XSS LOCALE (PROTEZIONE MATRICE DOM)
+ */
+function decayHTML(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
 }
