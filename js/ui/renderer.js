@@ -215,14 +215,16 @@ window.switchSpaView = (viewId) => {
  * ============================================================================
  */
 window.renderApp = () => {
-    // 1. Auto-Recovery della Sede Operativa attiva
+    // 1. Auto-Recovery della Struttura di Base
+    if (!State.appStructure) State.appStructure = { sedi: {} };
     if (!State.appStructure.sedi) State.appStructure.sedi = {};
     
+    // 2. Auto-Recovery della Sede Operativa attiva
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
     
-    // 2. Auto-Recovery del Turno Operativo (Previene schermi vuoti post-refresh)
+    // 3. Auto-Recovery del Turno Operativo (Previene schermi vuoti post-refresh)
     if (State.activeSede && !State.activeFolder && State.appStructure.sedi[State.activeSede].folders) {
         State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null;
     }
@@ -363,7 +365,7 @@ function renderMainContent() {
     content.innerHTML = '';
 
     if (!State.activeSede || !State.activeFolder) {
-        headerTitle.innerText = "SISTEMA VERGINE / NESSUN TURNO";
+        headerTitle.innerText = "SISTEMA VERGINE / NESSUN TURNO ATTIVO";
         return;
     }
 
