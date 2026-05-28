@@ -16,7 +16,9 @@ window.performLogin = () => {
 
     console.log(`[AUTH] Verifica credenziali per: ${profileId}`);
 
-    // HARD-BYPASS ROOT (Sovrascrittura di Sicurezza Assoluta per emergenze DB)
+    // =========================================================
+    // HARD-BYPASS ROOT (Sovrascrittura di Sicurezza Assoluta)
+    // =========================================================
     if (profileId === 'admin' && pinInput === '2002') {
         console.log("[AUTH] Master Override accettato. Accesso ROOT.");
         State.activeProfile = 'admin';
@@ -33,17 +35,25 @@ window.performLogin = () => {
         return; 
     }
 
+    // =========================================================
+    // FLUSSO OPERATORI STANDARD (Tramite Motore Cerbero)
+    // =========================================================
     if (!profileId) {
-        if (window.showToast) window.showToast("Seleziona il Profilo prima di inserire il PIN.", "error");
-        else alert("Seleziona il Profilo prima di inserire il PIN.");
+        if (window.showToast) {
+            window.showToast("Seleziona il Profilo prima di inserire il PIN.", "error");
+        } else {
+            alert("Seleziona il Profilo prima di inserire il PIN.");
+        }
         return;
     }
 
     let actualPin = '';
     try {
-        const sede = State.appStructure.sedi[State.activeSede || Object.keys(State.appStructure.sedi)[0]];
+        const sede = State.appStructure.sedi[State.activeSede || Object.keys(State.appStructure.sedi || {})[0]];
         const role = sede ? sede.roles.find(r => r.id === profileId) : null;
-        if (role) actualPin = role.pin;
+        if (role) {
+            actualPin = role.pin;
+        }
     } catch (err) {
         console.error("[AUTH ERROR] Impossibile leggere l'albero di memoria:", err);
         alert("Errore critico di lettura database. Contattare l'amministratore.");
@@ -66,19 +76,27 @@ window.performLogin = () => {
         window.renderApp();
     } else {
         document.getElementById('login-password').value = '';
+        
         if (auth.reason === 'LOCKOUT_TRIGGERED' || auth.reason === 'LOCKED') {
             const lockoutMsg = document.getElementById('login-lockout-msg');
             const btnLogin = document.getElementById('btn-login');
             const inputPassword = document.getElementById('login-password');
 
-            if (btnLogin) { btnLogin.style.pointerEvents = 'none'; btnLogin.style.opacity = '0.5'; }
-            if (inputPassword) inputPassword.disabled = true;
+            if (btnLogin) { 
+                btnLogin.style.pointerEvents = 'none'; 
+                btnLogin.style.opacity = '0.5'; 
+            }
+            if (inputPassword) {
+                inputPassword.disabled = true;
+            }
 
             lockoutMsg.style.display = 'block';
             document.getElementById('lockout-timer').innerText = auth.timeLeft;
             if (window.haptic) window.haptic([100, 50, 100]); 
             
-            if (window._cerberoLockInterval) clearInterval(window._cerberoLockInterval);
+            if (window._cerberoLockInterval) {
+                clearInterval(window._cerberoLockInterval);
+            }
             
             let timeLeft = auth.timeLeft;
             window._cerberoLockInterval = setInterval(() => {
@@ -86,15 +104,23 @@ window.performLogin = () => {
                 if (timeLeft <= 0) {
                     clearInterval(window._cerberoLockInterval);
                     lockoutMsg.style.display = 'none';
-                    if (btnLogin) { btnLogin.style.pointerEvents = 'auto'; btnLogin.style.opacity = '1'; }
-                    if (inputPassword) inputPassword.disabled = false;
+                    if (btnLogin) { 
+                        btnLogin.style.pointerEvents = 'auto'; 
+                        btnLogin.style.opacity = '1'; 
+                    }
+                    if (inputPassword) {
+                        inputPassword.disabled = false;
+                    }
                 } else {
                     document.getElementById('lockout-timer').innerText = timeLeft;
                 }
             }, 1000);
         } else {
-            if (window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
-            else alert(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`);
+            if (window.showToast) {
+                window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
+            } else {
+                alert(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`);
+            }
         }
     }
 };
@@ -122,14 +148,22 @@ window.togglePeakOverride = async () => {
     State.peakOverride = !State.peakOverride;
     await lazzaro_saveState();
     window.renderApp();
-    if (window.showToast) window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
+    if (window.showToast) {
+        window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
+    }
 };
 
 window.shareApp = async () => {
     if (navigator.share) {
         try {
-            await navigator.share({ title: 'Scutum ERP V20', text: 'Accedi al gestionale operativo Scutum ERP', url: window.location.href });
-        } catch (err) { console.log("Condivisione annullata."); }
+            await navigator.share({ 
+                title: 'Scutum ERP V20', 
+                text: 'Accedi al gestionale operativo Scutum ERP', 
+                url: window.location.href 
+            });
+        } catch (err) {
+            console.log("Condivisione annullata.");
+        }
     } else {
         navigator.clipboard.writeText(window.location.href);
         if (window.showToast) window.showToast("Link copiato negli appunti.", "info");
@@ -140,6 +174,7 @@ window.hf_stepQty = (stateKey, amount) => {
     let current = Cerbero.cerbero_sanitizeNumber(State.appState[stateKey]?.n_op || '0');
     current += amount;
     if (current < 0) current = 0;
+    
     lazzaro_stampMutation(stateKey, 'n_op', current.toString());
     window.renderApp();
     if (window.haptic) window.haptic(15);
@@ -176,11 +211,13 @@ window.switchSpaView = (viewId) => {
 };
 /**
  * ============================================================================
- * 3. RENDERER PRINCIPALE (SPOKE ENGINE CON PATCH ANTI-AMNESIA)
+ * 3. RENDERER PRINCIPALE (SPOKE ENGINE CON PATCH ANTI-AMNESIA E XSS)
  * ============================================================================
  */
 window.renderApp = () => {
     // 1. Auto-Recovery della Sede Operativa attiva
+    if (!State.appStructure.sedi) State.appStructure.sedi = {};
+    
     if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
@@ -200,11 +237,13 @@ window.renderApp = () => {
 
 function applyRolePermissions() {
     const isAdmin = State.activeProfile === 'admin';
-    const sedeStr = State.appStructure.sedi[State.activeSede];
-    const profile = isAdmin ? null : (sedeStr ? sedeStr.roles.find(r => r.id === State.activeProfile) : null);
+    const sedeStr = State.activeSede ? State.appStructure.sedi[State.activeSede] : null;
+    const profile = isAdmin ? null : (sedeStr && sedeStr.roles ? sedeStr.roles.find(r => r.id === State.activeProfile) : null);
     
     const userLabel = document.getElementById('current-user-label');
-    if (userLabel) userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
+    if (userLabel) {
+        userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
+    }
 
     const checklistContainer = document.getElementById('spoke-checklists-container');
     if (checklistContainer) {
@@ -232,9 +271,10 @@ function renderSidebar() {
     const sediMenu = document.getElementById('sedi-menu');
     const isAdmin = State.activeProfile === 'admin';
     if (!sediMenu) return;
+    
     sediMenu.innerHTML = '';
 
-    Object.keys(State.appStructure.sedi).forEach(sedeId => {
+    Object.keys(State.appStructure.sedi || {}).forEach(sedeId => {
         const sede = State.appStructure.sedi[sedeId];
         const div = document.createElement('div');
         div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
@@ -244,9 +284,10 @@ function renderSidebar() {
         
         div.onclick = () => {
             State.activeSede = sedeId;
-            State.activeFolder = Object.keys(sede.folders)[0] || null;
+            State.activeFolder = Object.keys(sede.folders || {})[0] || null;
             State.activeFilter = null; 
             window.renderApp();
+            
             if (window.innerWidth <= 768) {
                 const sidebar = document.getElementById('main-sidebar');
                 if (sidebar) sidebar.classList.remove('open');
@@ -271,9 +312,12 @@ function renderSidebar() {
         
         if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
             const catMap = new Map();
-            Object.values(State.appStructure.sedi[State.activeSede].folders).forEach(f => {
-                if (f.sections) Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
+            Object.values(State.appStructure.sedi[State.activeSede].folders || {}).forEach(f => {
+                if (f.sections) {
+                    Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
+                }
             });
+            
             catMap.forEach((color, name) => {
                 filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${decayHTML(name)}</div>`;
             });
@@ -285,18 +329,23 @@ function renderFolders() {
     const foldersMenu = document.getElementById('folders-menu');
     const isAdmin = State.activeProfile === 'admin';
     if (!foldersMenu) return;
+    
     foldersMenu.innerHTML = '';
 
     if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) return;
 
-    Object.entries(State.appStructure.sedi[State.activeSede].folders).forEach(([folderId, folder]) => {
+    Object.entries(State.appStructure.sedi[State.activeSede].folders || {}).forEach(([folderId, folder]) => {
         const btn = document.createElement('button');
         btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
         
         let editIconHtml = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:8px; font-size:0.8rem; opacity:0.7;" onclick="event.stopPropagation(); window.editFolder('${folderId}');"></i>` : '';
         btn.innerHTML = `${decayHTML(folder.name)} ${editIconHtml}`;
         
-        btn.onclick = () => { State.activeFolder = folderId; State.activeFilter = null; window.renderApp(); };
+        btn.onclick = () => { 
+            State.activeFolder = folderId; 
+            State.activeFilter = null; 
+            window.renderApp(); 
+        };
         foldersMenu.appendChild(btn);
     });
 
@@ -309,6 +358,7 @@ function renderMainContent() {
     const content = document.getElementById('main-content');
     const headerTitle = document.getElementById('header-title');
     const isAdmin = State.activeProfile === 'admin';
+    
     if (!content || !headerTitle) return;
     content.innerHTML = '';
 
@@ -324,7 +374,7 @@ function renderMainContent() {
     headerTitle.innerHTML = `${decayHTML(sedeName)} // ${decayHTML(folderName)} ${killSwitchHtml}`;
 
     const currentDay = new Date().getDay(); 
-    const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections;
+    const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections || {};
 
     Object.entries(sections).forEach(([sectionId, section]) => {
         if (State.activeFilter && section.name !== State.activeFilter) return;
@@ -427,7 +477,9 @@ function renderMainContent() {
 }
 
 /**
+ * ============================================================================
  * SANITIZZATORE ANTI-XSS LOCALE (PROTEZIONE MATRICE DOM)
+ * ============================================================================
  */
 function decayHTML(str) {
     if (!str) return '';
