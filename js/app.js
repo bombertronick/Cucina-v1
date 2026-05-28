@@ -16,7 +16,6 @@ window._selectedLoginProfile = 'admin';
 let deferredPrompt;
 
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Previene il banner nativo del browser per forzare il controllo dell'interfaccia
     e.preventDefault();
     deferredPrompt = e;
 
@@ -40,9 +39,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
         document.getElementById('btn-pwa-install').addEventListener('click', async () => {
             const popup = document.getElementById('pwa-install-popup');
-            if (popup) {
-                popup.style.display = 'none';
-            }
+            if (popup) popup.style.display = 'none';
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
@@ -57,18 +54,14 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 window.addEventListener('appinstalled', () => {
     const popup = document.getElementById('pwa-install-popup');
-    if (popup) {
-        popup.style.display = 'none';
-    }
+    if (popup) popup.style.display = 'none';
     deferredPrompt = null;
     console.log('[PWA] Scutum ERP configurata con successo come applicazione nativa.');
-    if (window.showToast) {
-        window.showToast("Applicazione installata con successo!", "success");
-    }
+    if (window.showToast) window.showToast("Applicazione installata con successo!", "success");
 });
 /**
  * ============================================================================
- * 2. BOOTLOADER PRINCIPALE - ASYNC ENGINE & STRUTTURA MATRIOSKA
+ * 2. BOOTLOADER PRINCIPALE E MOTORE ASINCRONO (CON FALLBACK DI SICUREZZA)
  * ============================================================================
  */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -90,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // AUTOCORREZIONE STATO CORROTTO (Previene schermate bianche)
+        // AUTOCORREZIONE STATO CORROTTO (Previene schermate bianche per variabili mancanti)
         if (!State.appStructure) State.appStructure = { sedi: {} };
         if (!State.appStructure.sedi) State.appStructure.sedi = {};
 
@@ -108,16 +101,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const profileSelect = document.getElementById('login-profile');
-        if (profileSelect) {
-            profileSelect.style.display = 'none'; 
-
+        // =========================================================
+        // INIEZIONE DINAMICA MATRIOSKA (Bypass vecchia struttura)
+        // =========================================================
+        const passInput = document.getElementById('login-password');
+        
+        if (passInput) {
             let container = document.getElementById('matryoshka-container');
             if (!container) {
                 container = document.createElement('div');
                 container.id = 'matryoshka-container';
                 container.style.width = '100%';
-                profileSelect.parentNode.insertBefore(container, profileSelect.nextSibling);
+                // Aggancio garantito: si inserisce immediatamente prima della password
+                passInput.parentNode.insertBefore(container, passInput);
             }
 
             let html = '';
@@ -167,16 +163,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (!hasOperators) {
-                html += `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px; border:1px dashed var(--border); border-radius:6px; background:rgba(0,0,0,0.15);">Nessun profilo operatore configurato. Accedere come ROOT per mappare le matrici logistiche della Sede.</div>`;
+                html += `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px; border:1px dashed var(--border); border-radius:6px; background:rgba(0,0,0,0.15);">Nessun profilo operatore configurato per questa Sede. Accedere come ROOT.</div>`;
             }
 
             html += `</div>`; 
             container.innerHTML = html;
 
-            const passInput = document.getElementById('login-password');
-            if (passInput) passInput.placeholder = "Inserisci PIN Amministratore (ROOT)";
+            passInput.placeholder = "Inserisci PIN Amministratore (ROOT)";
         }
 
+        // Assicura che la UI di login sia visibile
         const authScreen = document.getElementById('auth-screen');
         const appWrapper = document.getElementById('app-wrapper');
         if (authScreen && appWrapper) {
@@ -186,9 +182,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (error) {
         console.error("[FATAL ERROR] Errore critico nel Bootloader:", error);
-        // Fallback di estrema emergenza: mostra comunque il pannello
+        // Fallback di estrema emergenza: mostra comunque il pannello per tentare l'accesso cieco
         const authScreen = document.getElementById('auth-screen');
-        if(authScreen) {
+        if (authScreen) {
             authScreen.style.display = 'flex';
             authScreen.classList.add('active');
         }
@@ -218,6 +214,7 @@ window.selectProfileMatryoshka = (profileId, element) => {
     window._selectedLoginProfile = profileId;
     const passInput = document.getElementById('login-password');
     
+    // Reset di tutti i bottoni
     document.querySelectorAll('.matryoshka-op').forEach(el => {
         if (el.id === 'matryoshka-admin') {
             el.style.background = 'rgba(231,76,60,0.05)';
@@ -230,6 +227,7 @@ window.selectProfileMatryoshka = (profileId, element) => {
         }
     });
 
+    // Stile bottone attivo
     if (profileId === 'admin') {
         if (element) {
             element.style.background = 'rgba(231,76,60,0.15)';
