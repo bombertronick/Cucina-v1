@@ -1,92 +1,86 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark">
+<html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scutum Logistic ERP</title>
+    <title>Scutum ERP V20</title>
     
     <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#121212">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="./icons/icon-192.png">
-
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="./css/theme.css">
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <link rel="stylesheet" href="./css/style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 </head>
 <body>
 
-    <div id="auth-screen" class="spa-view active" style="display: flex;">
-        <div class="login-card">
-            <h1 style="color: var(--accent); font-weight: 900; letter-spacing: 2px; margin-bottom: 5px;">SCUTUM ERP</h1>
-            <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 24px;">LOGISTIC ECOSYSTEM V20</p>
+    <div id="auth-screen" class="spa-view active" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:var(--bg); padding:20px;">
+        
+        <div style="text-align:center; margin-bottom:32px;">
+            <i class="fa-solid fa-shield-halved" style="font-size:4rem; color:var(--accent); margin-bottom:16px; filter:drop-shadow(0 0 15px rgba(201,164,100,0.4));"></i>
+            <h1 style="margin:0; font-weight:900; letter-spacing:2px; font-size:2.2rem; color:var(--text-main);">SCUTUM<span style="color:var(--accent);">ERP</span></h1>
+            <div style="font-size:0.8rem; color:var(--text-muted); letter-spacing:4px; margin-top:8px;">LOGISTIC HUB V20</div>
+        </div>
+
+        <div style="width:100%; max-width:400px; background:var(--surface); padding:24px; border-radius:12px; border:1px solid var(--border); box-shadow:0 10px 30px rgba(0,0,0,0.5);">
             
-            <div id="matryoshka-container"></div>
-            <select id="login-profile" style="display: none;"></select>
-
-            <div class="input-group" style="margin-top: 15px;">
-                <label>Codice PIN Operativo</label>
-                <input type="password" id="login-password" pattern="[0-9]*" inputmode="numeric" placeholder="Inserisci PIN">
+            <div class="input-group" style="margin-top: 16px;">
+                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800; letter-spacing:1px;"><i class="fa-solid fa-key"></i> CODICE PIN OPERATIVO</label>
+                <input type="password" inputmode="numeric" id="login-password" placeholder="Seleziona profilo e inserisci PIN" style="font-size:1.2rem; letter-spacing:4px; text-align:center; padding:16px;">
             </div>
 
-            <div id="login-lockout-msg" style="display: none; color: var(--danger); font-size: 0.85rem; margin-bottom: 15px; font-weight: 700; text-align: center;">
-                <i class="fa-solid fa-triangle-exclamation"></i> TERMINALE BLOCCATO. Riprova tra <span id="lockout-timer">60</span>s
+            <div id="login-lockout-msg" style="display:none; text-align:center; color:var(--danger); font-weight:800; margin-bottom:16px; background:rgba(231,76,60,0.1); padding:12px; border-radius:6px; border:1px dashed var(--danger);">
+                <i class="fa-solid fa-triangle-exclamation"></i> SISTEMA BLOCCATO<br>Riprova tra <span id="lockout-timer"></span>s
             </div>
 
-            <button id="btn-login" class="btn-action solid" style="background: var(--accent); color: #000; font-weight: 800; padding: 14px;" onclick="window.performLogin()">
-                <i class="fa-solid fa-right-to-bracket"></i> ACCEDI AL TERMINALE
+            <button id="btn-login" class="btn-action solid" style="width:100%; padding:16px; font-size:1.1rem; margin-top:8px; display:flex; justify-content:center; align-items:center; gap:10px;" onclick="window.performLogin()">
+                <i class="fa-solid fa-right-to-bracket"></i> AUTORIZZA ACCESSO
             </button>
         </div>
     </div>
-
-    <div id="app-wrapper" class="spa-view" style="display: none;">
+    <div id="app-wrapper" class="spa-view" style="display:none; min-height:100vh; flex-direction:row; background:var(--bg);">
         
-        <aside id="main-sidebar">
-            <div style="padding: 20px; border-bottom: 1px solid var(--border);">
-                <div id="current-user-label" style="font-weight: 900; font-size: 0.9rem; color: var(--accent);">OPERATORE</div>
+        <aside id="main-sidebar" class="sidebar" style="width:280px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:20px; gap:24px; box-sizing:border-box;">
+            
+            <div style="padding:12px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid var(--border); display:flex; flex-direction:column; gap:4px;">
+                <div style="font-size:0.65rem; color:var(--text-muted); font-weight:800; letter-spacing:1px; text-transform:uppercase;"><i class="fa-solid fa-circle-user"></i> Sessione Operativa</div>
+                <div id="current-user-label" style="font-weight:900; color:var(--accent); font-size:1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">-</div>
             </div>
-            <div style="padding: 20px; font-size: 0.75rem; font-weight: 800; color: var(--text-muted); letter-spacing: 1px;">SEDI RETE</div>
-            <div id="sedi-menu"></div>
-            <div style="padding: 20px; font-size: 0.75rem; font-weight: 800; color: var(--text-muted); letter-spacing: 1px;">FILTRI CELLA</div>
-            <div id="categories-filter-menu"></div>
+
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="font-size:0.7rem; color:var(--text-muted); font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">RETE DISTRIBUITA</div>
+                <div id="sedi-menu" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; padding-right:4px;"></div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
+                <div style="font-size:0.7rem; color:var(--text-muted); font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">FILTRI SEZIONE</div>
+                <div id="categories-filter-menu" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:4px;"></div>
+            </div>
+
+            <div id="spoke-checklists-container" style="display:none; flex-direction:column; gap:8px; margin-top:auto; padding-top:16px; border-top:1px dashed var(--border);"></div>
         </aside>
 
-        <main id="main-layout">
-            <header id="main-header">
-                <button class="btn-action" id="menu-toggle-btn" style="width: auto; padding: 8px 12px;" onclick="document.getElementById('main-sidebar').classList.toggle('open')">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
-                <h2 id="header-title" style="margin: 0; font-weight: 800; font-size: 1.2rem;">SCUTUM LOGISTIC</h2>
-                <button class="btn-action" style="width: auto; padding: 8px 12px; border-color: var(--nexus); color: var(--nexus);" onclick="window.switchSpaView('nexus-view'); window.hf_renderNexusHub();">
-                    <i class="fa-solid fa-hubspot"></i> NEXUS HUB
-                </button>
+        <main style="flex:1; display:flex; flex-direction:column; min-width:0; box-sizing:border-box;">
+            
+            <header style="background:var(--surface); border-bottom:1px solid var(--border); padding:20px; display:flex; flex-direction:column; gap:16px; box-sizing:border-box;">
+                <div style="display:flex; justify-content:between; align-items:center; width:100%;">
+                    <h2 id="header-title" style="margin:0; font-weight:900; font-size:1.3rem; letter-spacing:0.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; color:var(--text-main); flex:1;">-</h2>
+                </div>
+
+                <div id="folders-menu" style="display:flex; flex-direction:row; gap:8px; overflow-x:auto; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.02);"></div>
             </header>
 
-            <div id="folders-menu"></div>
-            <div id="spoke-checklists-container" style="display: flex; gap: 12px; padding: 0 20px 16px 20px;"></div>
-            <div id="main-content"></div>
+            <div id="main-content" style="flex:1; padding:24px; overflow-y:auto; box-sizing:border-box; display:flex; flex-direction:column; gap:24px;"></div>
         </main>
-        
-        <button id="floating-paste-btn" style="display:none; position:fixed; bottom:24px; right:24px; width:60px; height:60px; border-radius:50%; background:var(--accent); color:#000; font-size:1.5rem; border:none; box-shadow:0 4px 15px rgba(201,164,100,0.4); z-index:100; justify-content:center; align-items:center;" onclick="window.hf_pasteSection()"><i class="fa-solid fa-paste"></i></button>
     </div>
 
-    <div id="nexus-view" class="spa-view" style="display: none; padding: 20px; max-width: 800px; margin: 0 auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-            <h2 style="font-weight: 900; color: var(--nexus); margin: 0;"><i class="fa-solid fa-circle-nodes"></i> MATRICE LOGISTICA CENTRALE</h2>
-            <button class="btn-action" style="width: auto; padding: 8px 16px;" onclick="window.switchSpaView('app-wrapper'); window.renderApp();">
-                <i class="fa-solid fa-arrow-left"></i> TORNA ALLA RETE
-            </button>
-        </div>
-        <div id="nexus-content"></div>
-        <div id="nexus-actions-container" style="display: flex; gap: 16px; margin-top: 24px;"></div>
-    </div>
+    <button id="floating-paste-btn" style="display:none; position:fixed; bottom:32px; right:32px; width:60px; height:60px; border-radius:50%; background:var(--accent); color:#000; border:none; justify-content:center; align-items:center; box-shadow:0 10px 25px rgba(0,0,0,0.5); z-index:999; cursor:pointer;" onclick="window.pasteSectionLogic()"><i class="fa-solid fa-paste" style="font-size:1.5rem;"></i></button>
 
-    <div id="modal-layer" class="modal-overlay" style="display: none;"></div>
+    <div id="modal-layer" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:9999; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;"></div>
 
     <script type="module" src="./js/app.js"></script>
 </body>
