@@ -1,74 +1,134 @@
 // File: js/core/lazzaro.js
 import { State } from './state.js';
 
-/**
- * LAZZARO PROTOCOL - MOTORE DI PERSISTENZA E SINCRONIZZAZIONE DATI (INDEXEDDB)
- */
+const DB_NAME = 'ScutumERP_Vault';
+const DB_VERSION = 1;
+const STORE_NAME = 'scutum_state';
+const STATE_KEY = 'v20_master_state';
 
-export const lazzaro_init = async () => {
-    try {
-        // Lettura asincrona profonda da LocalForage
-        const savedStructure = await localforage.getItem('scutum_structure');
-        const savedState = await localforage.getItem('scutum_state');
-        
-        if (savedStructure) {
-            State.appStructure = savedStructure;
-        } else {
-            // Inizializzazione struttura vergine se il DB è vuoto
-            State.appStructure = { sedi: {} };
+let dbInstance = null;
+
+export const lazzaro_init = () => {
+    return new Promise((resolve) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = (event) => {
+            console.error("[LAZZARO ERROR] Accesso a IndexedDB negato o non supportato:", event.target.errorCode);
+            resolve(false); 
+        };
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME);
+                console.log("[LAZZARO] Nuovo ObjectStore creato.");
+            }
+        };
+
+        request.onsuccess = (event) => {
+            dbInstance = event.target.result;
+            console.log("[LAZZARO] Connessione al Vault Locale IndexedDB stabilita.");
+            lazzaro_loadState().then(() => resolve(true));
+        };
+    });
+};
+
+const lazzaro_loadState = () => {
+    return new Promise((resolve) => {
+        if (!dbInstance) { 
+            resolve(false); 
+            return; 
         }
         
-        if (savedState) {
-            State.appState = savedState;
-        } else {
-            State.appState = {};
-        }
-        
-        console.log("[LAZZARO] Boot completato. Matrice dati caricata in RAM con successo.");
-        return true;
-    } catch (e) {
-        console.error("[LAZZARO CRITICAL ERROR] Impossibile leggere IndexedDB. Dati compromessi o assenti.", e);
-        return false;
-    }
-};
+        try {
+            const transaction = dbInstance.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(STATE_KEY);
 
-export const lazzaro_saveState = async () => {
-    try {
-        // Scrittura parallela dello stato strutturale e dello stato operativo
-        await localforage.setItem('scutum_structure', State.appStructure);
-        await localforage.setItem('scutum_state', State.appState);
-    } catch (e) {
-        console.error("[LAZZARO CRITICAL ERROR] Impossibile scrivere in IndexedDB. Persistenza fallita.", e);
-    }
-};
-
-export const lazzaro_stampMutation = (stateKey, field, value) => {
-    if (!State.appState[stateKey]) {
-        State.appState[stateKey] = { done: false, n_op: '0', note: '' };
-    }
-    State.appState[stateKey][field] = value;
-    
-    // Innesco asincrono del salvataggio senza bloccare il thread principale (UI)
-    lazzaro_saveState(); 
-};
-
-export const lazzaro_purgeGhosts = (prefix) => {
-    let hasChanges = false;
-    Object.keys(State.appState).forEach(key => {
-        // Disintegrazione matematica delle chiavi orfane basata su prefisso gerarchico
-        if (key.startsWith(prefix)) {
-            delete State.appState[key];
-            hasChanges = true;
+            request.onsuccess = (event) => {
+                const savedState = event.target.result;
+                if (savedState) {
+                    State.appStructure = savedState.appStructure || { sedi: {} };
+                    State.appState = savedState.appState || {};
+                    State.currentTheme = savedState.currentTheme || 'dark';
+                    State.peakOverride = savedState.peakOverride || false;
+                    console.log("[LAZZARO] Matrice di stato ripristinata in memoria RAM.");
+                } else {
+                    console.log("[LAZZARO] Nessun salvataggio precedente rilevato. Inizializzazione matrice vergine.");
+                }
+                resolve(true);
+            };
+            
+            request.onerror = () => {
+                console.error("[LAZZARO ERROR] Lettura dello stato fallita.");
+                resolve(false);
+            };
+        } catch (err) {
+            console.error("[LAZZARO CRITICAL] Eccezione durante il caricamento:", err);
+            resolve(false);
         }
     });
-    
-    if (hasChanges) {
-        lazzaro_saveState();
-    }
 };
 
-// Esportazione nello spazio globale per consentire l'interoperabilità asincrona con l'interfaccia
-window.lazzaro_init = lazzaro_init;
-window.lazzaro_saveState = lazzaro_saveState;
-window.lazzaro_stampMutation = lazzaro_stampMutation;
-window.lazzaro_purgeGhosts = lazzaro_purgeGhosts;
+export const lazzaro_saveState = () => {
+    return new Promise((resolve) => {
+        if (!dbInstance) { 
+            resolve(false); 
+            return; 
+        }
+        
+        const stateToSave = {
+            appStructure: State.appStructure,
+            appState: State.appState,
+            currentTheme: State.currentTheme,
+            peakOverride: State.peakOverride,
+            timestamp: Date.now()
+        };
+
+        try {
+            const transaction = dbInstance.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.put(stateToSave, STATE_KEY);
+
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => resolve(false);
+        } catch (err) {
+            console.error("[LAZZARO CRITICAL] Impossibile scrivere su disco:", err);
+            resolve(false);
+        }
+    });
+};
+
+export const lazzaro_stampMutation = (stateKey, property, value) => {
+    if (!State.appState[stateKey]) {
+        State.appState[stateKey] = { n_op: '', done: false, note: '' };
+    }
+    State.appState[stateKey][property] = value;
+    
+    // Innesco asincrono del salvataggio senza bloccare il Main Thread UI
+    lazzaro_saveState();
+};
+
+export const lazzaro_wipeVault = () => {
+    return new Promise((resolve) => {
+        if (!dbInstance) { 
+            resolve(false); 
+            return; 
+        }
+        
+        try {
+            const transaction = dbInstance.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.clear();
+            
+            request.onsuccess = () => {
+                console.warn("[LAZZARO] VAULT AZZERATO COMPLETAMENTE.");
+                resolve(true);
+            };
+            request.onerror = () => resolve(false);
+        } catch (err) {
+            console.error("[LAZZARO CRITICAL] Fallimento durante il wipe:", err);
+            resolve(false);
+        }
+    });
+};
