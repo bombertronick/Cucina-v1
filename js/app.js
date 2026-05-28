@@ -1,9 +1,9 @@
 /// File: js/app.js
-import { lazzaro_init } from './core/lazzaro.js?v=patch1';
-import { State } from './core/state.js?v=patch1';
-import './core/ledger.js?v=patch1';
-import './ui/renderer.js?v=patch1';
-import './ui/nexus.js?v=patch1';
+import { lazzaro_init } from './core/lazzaro.js';
+import { State } from './core/state.js';
+import './core/ledger.js';
+import './ui/renderer.js';
+import './ui/nexus.js';
 
 // FORZATURA ASSOLUTA: Il profilo ROOT è sempre il default all'avvio
 window._selectedLoginProfile = 'admin';
