@@ -6,34 +6,13 @@ import './ui/renderer.js';
 import './ui/nexus.js';
 
 window._selectedLoginProfile = 'admin';
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); deferredPrompt = e;
-    if (!document.getElementById('pwa-install-popup')) {
-        const popupHTML = `<div id="pwa-install-popup" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); width:90%; max-width:400px; background:var(--surface); border:2px solid var(--accent); border-radius:var(--radius-lg); padding:24px; box-shadow:0 10px 40px rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; gap:16px;"><div style="display:flex; justify-content:space-between;"><div><h3 style="color:var(--accent); margin:0 0 6px 0; font-size:1.2rem;">INSTALLA APP</h3><p style="color:var(--text-main); font-size:0.85rem; margin:0;">Aggiungi l'App Pixel alla Home.</p></div><button onclick="document.getElementById('pwa-install-popup').style.display='none'" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; font-weight:800;">&times;</button></div><button id="btn-pwa-install" class="btn-action solid" style="padding:14px; width:100%;">AGGIUNGI ALLA HOME</button></div>`;
-        document.body.insertAdjacentHTML('beforeend', popupHTML);
-        document.getElementById('btn-pwa-install').addEventListener('click', async () => {
-            document.getElementById('pwa-install-popup').style.display = 'none';
-            if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
-        });
-    } else { document.getElementById('pwa-install-popup').style.display = 'flex'; }
-});
-
-window.addEventListener('appinstalled', () => {
-    const popup = document.getElementById('pwa-install-popup');
-    if (popup) popup.style.display = 'none';
-    deferredPrompt = null;
-});
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.warn(err));
-        }
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
         const dbReady = await lazzaro_init();
-        if (!dbReady) { alert("ERRORE: Impossibile mappare la persistenza locale."); return; }
+        if (!dbReady) { alert("ERRORE AVVIO DATABASE"); return; }
 
         if (!State.appStructure) State.appStructure = { sedi: {} };
         if (!State.appStructure.sedi) State.appStructure.sedi = {};
@@ -99,57 +78,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const authScreen = document.getElementById('auth-screen');
-        const appWrapper = document.getElementById('app-wrapper');
-        if (authScreen && appWrapper) {
-            appWrapper.style.display = 'none';
-            authScreen.style.display = 'flex';
-            authScreen.classList.add('active');
-        }
-    } catch (error) {
-        console.error("[FATAL ERROR] Errore Bootloader:", error);
-        const authScreen = document.getElementById('auth-screen');
         if (authScreen) { authScreen.style.display = 'flex'; authScreen.classList.add('active'); }
+    } catch (error) {
+        console.error("[FATAL ERROR]", error);
     }
 });
 
 window.toggleMatryoshka = (teamId) => {
-    const content = document.getElementById(`content-${teamId}`);
-    const icon = document.getElementById(`icon-${teamId}`);
-    if (!content) return;
-    if (content.style.display === 'none') {
-        content.style.display = 'flex';
-        if (icon) icon.style.transform = 'rotate(180deg)';
-    } else {
-        content.style.display = 'none';
-        if (icon) icon.style.transform = 'rotate(0deg)';
-    }
+    const c = document.getElementById(`content-${teamId}`);
+    const i = document.getElementById(`icon-${teamId}`);
+    if (!c) return;
+    if (c.style.display === 'none') { c.style.display = 'flex'; if (i) i.style.transform = 'rotate(180deg)'; }
+    else { c.style.display = 'none'; if (i) i.style.transform = 'rotate(0deg)'; }
 };
 
-window.selectProfileMatryoshka = (profileId, element) => {
-    window._selectedLoginProfile = profileId;
-    const passInput = document.getElementById('login-password');
-    
-    document.querySelectorAll('.matryoshka-op').forEach(el => {
-        if (el.id === 'matryoshka-admin') {
-            el.style.background = 'rgba(255,180,171,0.1)';
-            el.style.borderColor = 'dashed var(--danger)';
-        } else {
-            el.style.borderColor = 'transparent';
-            el.style.background = 'transparent';
-        }
+window.selectProfileMatryoshka = (id, el) => {
+    window._selectedLoginProfile = id;
+    const pass = document.getElementById('login-password');
+    document.querySelectorAll('.matryoshka-op').forEach(e => {
+        if (e.id === 'matryoshka-admin') { e.style.background = 'rgba(255,180,171,0.1)'; e.style.borderColor = 'dashed var(--danger)'; }
+        else { e.style.borderColor = 'transparent'; e.style.background = 'transparent'; }
     });
-
-    if (profileId === 'admin') {
-        if (element) {
-            element.style.background = 'rgba(255,180,171,0.2)';
-            element.style.borderColor = 'solid var(--danger)';
-        }
-        if (passInput) passInput.placeholder = "PIN ROOT";
+    if (id === 'admin') {
+        if (el) { el.style.background = 'rgba(255,180,171,0.2)'; el.style.borderColor = 'solid var(--danger)'; }
+        if (pass) pass.placeholder = "PIN ROOT";
     } else {
-        if (element) {
-            element.style.borderColor = 'var(--accent)';
-            element.style.background = 'rgba(168,199,250,0.15)'; // Pixel Blue pastello alpha
-        }
-        if (passInput) passInput.placeholder = "PIN Operatore";
+        if (el) { el.style.borderColor = 'var(--accent)'; el.style.background = 'rgba(168,199,250,0.15)'; }
+        if (pass) pass.placeholder = "PIN Operatore";
     }
 };
