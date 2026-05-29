@@ -18,69 +18,84 @@
 </head>
 <body>
 
+    <div id="mobile-overlay" onclick="window.toggleMobileMenu()"></div>
+
     <div id="auth-screen" class="spa-view active" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:var(--bg); padding:20px; box-sizing:border-box;">
-        
         <div style="text-align:center; margin-bottom:32px;">
-            <i class="fa-solid fa-shield-halved" style="font-size:4rem; color:var(--accent); margin-bottom:16px; filter:drop-shadow(0 0 15px rgba(201,164,100,0.4));"></i>
+            <i class="fa-solid fa-shield-halved" style="font-size:4rem; color:var(--accent); margin-bottom:16px;"></i>
             <h1 style="margin:0; font-weight:900; letter-spacing:2px; font-size:2.2rem; color:var(--text-main);">SCUTUM<span style="color:var(--accent);">ERP</span></h1>
             <div style="font-size:0.8rem; color:var(--text-muted); letter-spacing:4px; margin-top:8px;">LOGISTIC HUB V20</div>
         </div>
 
-        <div style="width:100%; max-width:400px; background:var(--surface); padding:24px; border-radius:12px; border:1px solid var(--border); box-shadow:0 10px 30px rgba(0,0,0,0.5); box-sizing:border-box;">
-            
+        <div style="width:100%; max-width:400px; background:var(--surface); padding:24px; border-radius:var(--radius-lg); box-shadow:0 10px 30px rgba(0,0,0,0.5); box-sizing:border-box;">
             <div class="input-group" style="margin-top: 16px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800; letter-spacing:1px;"><i class="fa-solid fa-key"></i> CODICE PIN OPERATIVO</label>
-                <input type="password" inputmode="numeric" id="login-password" placeholder="Attendere..." style="font-size:1.2rem; letter-spacing:4px; text-align:center; padding:16px; width:100%; box-sizing:border-box;">
+                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800; letter-spacing:1px;"><i class="fa-solid fa-key"></i> PIN OPERATIVO</label>
+                <input type="password" inputmode="numeric" id="login-password" placeholder="Attendere..." style="font-size:1.2rem; letter-spacing:4px; text-align:center; padding:16px; width:100%;">
             </div>
 
-            <div id="login-lockout-msg" style="display:none; text-align:center; color:var(--danger); font-weight:800; margin-bottom:16px; background:rgba(231,76,60,0.1); padding:12px; border-radius:6px; border:1px dashed var(--danger);">
+            <div id="login-lockout-msg" style="display:none; text-align:center; color:var(--danger); font-weight:800; margin-bottom:16px; background:rgba(255,180,171,0.1); padding:12px; border-radius:6px; border:1px dashed var(--danger);">
                 <i class="fa-solid fa-triangle-exclamation"></i> SISTEMA BLOCCATO<br>Riprova tra <span id="lockout-timer"></span>s
             </div>
 
-            <button id="btn-login" class="btn-action solid" style="width:100%; padding:16px; font-size:1.1rem; margin-top:8px; display:flex; justify-content:center; align-items:center; gap:10px;" onclick="window.performLogin()">
+            <button id="btn-login" class="btn-action solid" style="width:100%; padding:16px; margin-top:16px;" onclick="window.performLogin()">
                 <i class="fa-solid fa-right-to-bracket"></i> AUTORIZZA ACCESSO
             </button>
         </div>
     </div>
-
     <div id="app-wrapper" class="spa-view" style="display:none; min-height:100vh; flex-direction:row; background:var(--bg);">
         
-        <aside id="main-sidebar" class="sidebar" style="width:280px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:20px; gap:24px; box-sizing:border-box; flex-shrink:0;">
+        <aside id="main-sidebar" class="sidebar" style="width:280px; display:flex; flex-direction:column; padding:20px; gap:24px; box-sizing:border-box; flex-shrink:0;">
             
-            <div style="padding:12px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid var(--border); display:flex; flex-direction:column; gap:4px;">
+            <div style="padding:16px; background:var(--surface-variant); border-radius:var(--radius-md); display:flex; flex-direction:column; gap:4px;">
                 <div style="font-size:0.65rem; color:var(--text-muted); font-weight:800; letter-spacing:1px; text-transform:uppercase;"><i class="fa-solid fa-circle-user"></i> Sessione Operativa</div>
                 <div id="current-user-label" style="font-weight:900; color:var(--accent); font-size:1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">-</div>
             </div>
 
             <div style="display:flex; flex-direction:column; gap:8px;">
                 <div style="font-size:0.7rem; color:var(--text-muted); font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">RETE DISTRIBUITA</div>
-                <div id="sedi-menu" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; padding-right:4px;"></div>
+                <div id="sedi-menu" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;"></div>
             </div>
 
             <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
                 <div style="font-size:0.7rem; color:var(--text-muted); font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">FILTRI SEZIONE</div>
-                <div id="categories-filter-menu" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:4px;"></div>
+                <div id="categories-filter-menu" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto;"></div>
             </div>
-
-            <div id="spoke-checklists-container" style="display:none; flex-direction:column; gap:8px; margin-top:auto; padding-top:16px; border-top:1px dashed var(--border);"></div>
+            
+            <div id="spoke-checklists-container" style="display:none; flex-direction:column; gap:8px; margin-top:auto; padding-top:16px; border-top:1px dashed var(--surface-variant);"></div>
         </aside>
 
-        <main style="flex:1; display:flex; flex-direction:column; min-width:0; box-sizing:border-box;">
+        <main style="flex:1; display:flex; flex-direction:column; min-width:0; box-sizing:border-box; position: relative;">
             
-            <header style="background:var(--surface); border-bottom:1px solid var(--border); padding:20px; display:flex; flex-direction:column; gap:16px; box-sizing:border-box;">
-                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                    <h2 id="header-title" style="margin:0; font-weight:900; font-size:1.3rem; letter-spacing:0.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; color:var(--text-main); flex:1;">-</h2>
+            <header style="background:var(--surface); border-bottom:1px solid rgba(255,255,255,0.05); padding:16px 20px; display:flex; flex-direction:column; gap:16px; box-sizing:border-box;">
+                
+                <div style="display:flex; justify-content:flex-start; align-items:center; width:100%;">
+                    <button class="menu-toggle-btn" onclick="window.toggleMobileMenu()">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <h2 id="header-title" style="margin:0; font-weight:900; font-size:1.3rem; text-transform:uppercase; color:var(--text-main); flex:1;">-</h2>
                 </div>
-                <div id="folders-menu" style="display:flex; flex-direction:row; gap:8px; overflow-x:auto; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.02);"></div>
+                
+                <div id="folders-menu" style="display:flex; flex-direction:row; gap:12px; overflow-x:auto; padding-bottom:8px;"></div>
             </header>
 
-            <div id="main-content" style="flex:1; padding:24px; overflow-y:auto; box-sizing:border-box; display:flex; flex-direction:column; gap:24px;"></div>
+            <div id="main-content" style="flex:1; overflow-y:auto; box-sizing:border-box; display:flex; flex-direction:column; padding:24px;"></div>
         </main>
     </div>
 
     <button id="floating-paste-btn" style="display:none; position:fixed; bottom:32px; right:32px; width:60px; height:60px; border-radius:50%; background:var(--accent); color:#000; border:none; justify-content:center; align-items:center; box-shadow:0 10px 25px rgba(0,0,0,0.5); z-index:999; cursor:pointer;" onclick="window.pasteSectionLogic()"><i class="fa-solid fa-paste" style="font-size:1.5rem;"></i></button>
 
-    <div id="modal-layer" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:9999; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;"></div>
+    <div id="modal-layer" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:9999; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;"></div>
+
+    <script>
+        window.toggleMobileMenu = () => {
+            const sidebar = document.getElementById('main-sidebar');
+            const overlay = document.getElementById('mobile-overlay');
+            if (sidebar && overlay) {
+                sidebar.classList.toggle('open');
+                overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+            }
+        };
+    </script>
 
     <script type="module" src="./js/app.js"></script>
 </body>
