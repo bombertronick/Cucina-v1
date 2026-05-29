@@ -2,27 +2,24 @@
 import { State } from '../core/state.js';
 import { Cerbero } from '../core/cerbero.js';
 import { lazzaro_stampMutation, lazzaro_saveState } from '../core/lazzaro.js';
+import { Ledger } from '../core/ledger.js';
 
 /**
  * ============================================================================
- * 1. CONTROLLER ACCESSO (LOGIN MATRIOSKA CON HARD-BYPASS ROOT)
+ * 1. CONTROLLER ACCESSO (LOGIN MATRIOSKA CON HARD-BYPASS ROOT E AUDIT LOG)
  * ============================================================================
  */
-window.performLogin = () => {
+window.performLogin = async () => {
     console.log("[AUTH] Sequenza di innesco avviata...");
     
     const profileId = window._selectedLoginProfile || 'admin';
     const pinInput = document.getElementById('login-password').value;
 
-    console.log(`[AUTH] Verifica credenziali per: ${profileId}`);
-
-    // =========================================================
-    // HARD-BYPASS ROOT (Sovrascrittura di Sicurezza Assoluta)
-    // =========================================================
+    // HARD-BYPASS ROOT
     if (profileId === 'admin' && pinInput === '2002') {
-        console.log("[AUTH] Master Override accettato. Accesso ROOT.");
         State.activeProfile = 'admin';
         sessionStorage.setItem('scutum_active_session', 'admin');
+        await Ledger.logAction('admin', 'LOGIN_ROOT', { method: 'Master Override' });
         
         document.getElementById('login-password').value = '';
         document.getElementById('login-lockout-msg').style.display = 'none';
@@ -32,18 +29,13 @@ window.performLogin = () => {
         document.getElementById('app-wrapper').classList.add('active');
         
         window.renderApp();
+        if (window.showToast) window.showToast("Terminale ROOT sbloccato.", "success");
         return; 
     }
 
-    // =========================================================
-    // FLUSSO OPERATORI STANDARD (Tramite Motore Cerbero)
-    // =========================================================
+    // FLUSSO OPERATORI STANDARD
     if (!profileId) {
-        if (window.showToast) {
-            window.showToast("Seleziona il Profilo prima di inserire il PIN.", "error");
-        } else {
-            alert("Seleziona il Profilo prima di inserire il PIN.");
-        }
+        if (window.showToast) window.showToast("Seleziona la Squadra Operativa prima di inserire il PIN.", "error");
         return;
     }
 
@@ -51,12 +43,9 @@ window.performLogin = () => {
     try {
         const sede = State.appStructure.sedi[State.activeSede || Object.keys(State.appStructure.sedi || {})[0]];
         const role = sede ? sede.roles.find(r => r.id === profileId) : null;
-        if (role) {
-            actualPin = role.pin;
-        }
+        if (role) actualPin = role.pin;
     } catch (err) {
-        console.error("[AUTH ERROR] Impossibile leggere l'albero di memoria:", err);
-        alert("Errore critico di lettura database. Contattare l'amministratore.");
+        if (window.showToast) window.showToast("Errore critico lettura matrice dati.", "error");
         return;
     }
 
@@ -65,6 +54,7 @@ window.performLogin = () => {
     if (auth.success) {
         State.activeProfile = profileId;
         sessionStorage.setItem('scutum_active_session', profileId);
+        await Ledger.logAction(profileId, 'LOGIN_OPERATORE', { status: 'Autorizzato' });
         
         document.getElementById('login-password').value = '';
         document.getElementById('login-lockout-msg').style.display = 'none';
@@ -74,29 +64,24 @@ window.performLogin = () => {
         document.getElementById('app-wrapper').classList.add('active');
         
         window.renderApp();
+        if (window.showToast) window.showToast("Accesso autorizzato.", "success");
     } else {
         document.getElementById('login-password').value = '';
+        await Ledger.logAction(profileId, 'LOGIN_FALLITO', { reason: auth.reason });
         
         if (auth.reason === 'LOCKOUT_TRIGGERED' || auth.reason === 'LOCKED') {
             const lockoutMsg = document.getElementById('login-lockout-msg');
             const btnLogin = document.getElementById('btn-login');
             const inputPassword = document.getElementById('login-password');
 
-            if (btnLogin) { 
-                btnLogin.style.pointerEvents = 'none'; 
-                btnLogin.style.opacity = '0.5'; 
-            }
-            if (inputPassword) {
-                inputPassword.disabled = true;
-            }
+            if (btnLogin) { btnLogin.style.pointerEvents = 'none'; btnLogin.style.opacity = '0.5'; }
+            if (inputPassword) inputPassword.disabled = true;
 
             lockoutMsg.style.display = 'block';
             document.getElementById('lockout-timer').innerText = auth.timeLeft;
             if (window.haptic) window.haptic([100, 50, 100]); 
             
-            if (window._cerberoLockInterval) {
-                clearInterval(window._cerberoLockInterval);
-            }
+            if (window._cerberoLockInterval) clearInterval(window._cerberoLockInterval);
             
             let timeLeft = auth.timeLeft;
             window._cerberoLockInterval = setInterval(() => {
@@ -104,29 +89,21 @@ window.performLogin = () => {
                 if (timeLeft <= 0) {
                     clearInterval(window._cerberoLockInterval);
                     lockoutMsg.style.display = 'none';
-                    if (btnLogin) { 
-                        btnLogin.style.pointerEvents = 'auto'; 
-                        btnLogin.style.opacity = '1'; 
-                    }
-                    if (inputPassword) {
-                        inputPassword.disabled = false;
-                    }
+                    if (btnLogin) { btnLogin.style.pointerEvents = 'auto'; btnLogin.style.opacity = '1'; }
+                    if (inputPassword) inputPassword.disabled = false;
                 } else {
                     document.getElementById('lockout-timer').innerText = timeLeft;
                 }
             }, 1000);
         } else {
-            if (window.showToast) {
-                window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
-            } else {
-                alert(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`);
-            }
+            if (window.showToast) window.showToast(`PIN ERRATO. Tentativi rimasti: ${auth.attemptsLeft}`, "error");
         }
     }
 };
 
-window.performLogout = () => {
+window.performLogout = async () => {
     if (!confirm("Sei sicuro di voler chiudere la sessione operativa?")) return;
+    if (State.activeProfile) await Ledger.logAction(State.activeProfile, 'LOGOUT', {});
     sessionStorage.removeItem('scutum_active_session');
     window._selectedLoginProfile = null;
     State.activeProfile = null;
@@ -135,7 +112,7 @@ window.performLogout = () => {
 
 /**
  * ============================================================================
- * 2. UTILITY DI SISTEMA E MUTATORI OPERATIVI (INPUT IBRIDO)
+ * 2. UTILITY DI SISTEMA E MUTATORI OPERATIVI (CON TRACKING LIBRERIA)
  * ============================================================================
  */
 window.toggleTheme = async () => {
@@ -148,25 +125,16 @@ window.togglePeakOverride = async () => {
     State.peakOverride = !State.peakOverride;
     await lazzaro_saveState();
     window.renderApp();
-    if (window.showToast) {
-        window.showToast(State.peakOverride ? "MODALITÀ ALTO CARICO ATTIVATA (Soglie MAX)" : "MODALITÀ STANDARD RIPRISTINATA", State.peakOverride ? "error" : "info");
-    }
+    if (window.showToast) window.showToast(State.peakOverride ? "ALTO CARICO ATTIVO (Soglie Max)" : "MODALITÀ STANDARD", State.peakOverride ? "warning" : "info");
 };
 
 window.shareApp = async () => {
     if (navigator.share) {
-        try {
-            await navigator.share({ 
-                title: 'Scutum ERP V20', 
-                text: 'Accedi al gestionale operativo Scutum ERP', 
-                url: window.location.href 
-            });
-        } catch (err) {
-            console.log("Condivisione annullata.");
-        }
+        try { await navigator.share({ title: 'Scutum ERP', text: 'Accesso Nodo Operativo', url: window.location.href }); } 
+        catch (err) { console.log("Condivisione annullata."); }
     } else {
         navigator.clipboard.writeText(window.location.href);
-        if (window.showToast) window.showToast("Link copiato negli appunti.", "info");
+        if (window.showToast) window.showToast("Link di sistema copiato negli appunti.", "info");
     }
 };
 
@@ -177,317 +145,220 @@ window.hf_stepQty = (stateKey, amount) => {
     
     lazzaro_stampMutation(stateKey, 'n_op', current.toString());
     window.renderApp();
+    
     if (window.haptic) window.haptic(15);
+    Ledger.logAction(State.activeProfile || 'Sconosciuto', 'VARIAZIONE_INVENTARIO_RAPIDA', { key: stateKey, qty: current });
 };
 
 window.hf_updateQty = (stateKey, value) => {
     const cleanValue = Cerbero.cerbero_sanitizeNumber(value);
     lazzaro_stampMutation(stateKey, 'n_op', cleanValue.toString());
     window.renderApp();
+    Ledger.logAction(State.activeProfile || 'Sconosciuto', 'MODIFICA_INVENTARIO', { key: stateKey, qty: cleanValue });
 };
 
 window.hf_updateNote = (stateKey, value) => {
     const cleanNote = Cerbero.cerbero_sanitizeText(value);
     lazzaro_stampMutation(stateKey, 'note', cleanNote);
+    Ledger.logAction(State.activeProfile || 'Sconosciuto', 'MODIFICA_NOTA', { key: stateKey });
 };
 
 window.toggleDone = (stateKey) => {
     const currentState = State.appState[stateKey]?.done || false;
     lazzaro_stampMutation(stateKey, 'done', !currentState);
     window.renderApp();
+    
     if (window.haptic) window.haptic(20);
-};
-
-window.switchSpaView = (viewId) => {
-    document.querySelectorAll('.spa-view').forEach(v => {
-        v.style.display = 'none';
-        v.classList.remove('active');
-    });
-    const target = document.getElementById(viewId);
-    if (target) {
-        target.style.display = viewId === 'app-wrapper' ? 'flex' : 'block';
-        target.classList.add('active');
-    }
+    Ledger.logAction(State.activeProfile || 'Sconosciuto', 'STATO_TASK_ALTERATO', { key: stateKey, done: !currentState });
 };
 /**
  * ============================================================================
- * 3. RENDERER PRINCIPALE (SPOKE ENGINE CON PATCH ANTI-AMNESIA E XSS)
+ * 3. SPOKE ENGINE (MOTORE DI RENDERING DOM E VIRTUALIZZAZIONE)
  * ============================================================================
  */
 window.renderApp = () => {
-    // 1. Auto-Recovery della Struttura di Base
-    if (!State.appStructure) State.appStructure = { sedi: {} };
-    if (!State.appStructure.sedi) State.appStructure.sedi = {};
-    
-    // 2. Auto-Recovery della Sede Operativa attiva
-    if (!State.activeSede && Object.keys(State.appStructure.sedi).length > 0) {
+    if (!State.activeProfile) return;
+
+    // 1. Sidebar: Info Utente
+    const profileName = State.activeProfile === 'admin' ? 'ROOT (DIREZIONE)' : State.activeProfile.toUpperCase();
+    const userLabel = document.getElementById('current-user-label');
+    if (userLabel) userLabel.innerText = profileName;
+
+    // 2. Sidebar: Menu Sedi e Strumenti Amministrativi
+    const sediMenu = document.getElementById('sedi-menu');
+    if (sediMenu) {
+        let html = '';
+        Object.keys(State.appStructure.sedi || {}).forEach(sedeId => {
+            const s = State.appStructure.sedi[sedeId];
+            const isActive = State.activeSede === sedeId ? 'active' : '';
+            html += `<div class="nav-item ${isActive}" onclick="window.switchSede('${sedeId}')"><i class="fa-solid fa-location-dot" style="width:20px;"></i> ${s.name.toUpperCase()}</div>`;
+        });
+
+        if (State.activeProfile === 'admin') {
+            html += `
+            <div style="margin-top:16px; border-top:1px dashed var(--surface-variant); padding-top:16px; display:flex; flex-direction:column; gap:6px;">
+                <div style="font-size:0.65rem; color:var(--danger); font-weight:800; letter-spacing:1.5px; margin-bottom:4px;"><i class="fa-solid fa-lock"></i> ROOT VAULT</div>
+                <div class="nav-item" onclick="window.openSystemSettings()"><i class="fa-solid fa-gear" style="width:20px;"></i> Impostazioni Sistema</div>
+                <div class="nav-item" onclick="window.openLedgerModal()"><i class="fa-solid fa-book-journal-whills" style="width:20px;"></i> Libro Mastro</div>
+                <div class="nav-item" onclick="window.openModal_Sede()"><i class="fa-solid fa-plus" style="width:20px;"></i> Nuova Sede (Hub)</div>
+                <div class="nav-item" onclick="window.openModal_Roles()"><i class="fa-solid fa-users-gear" style="width:20px;"></i> Gestione Operatori</div>
+            </div>`;
+        }
+
+        html += `
+        <div style="margin-top:16px; border-top:1px dashed var(--surface-variant); padding-top:16px;">
+            <button onclick="window.performLogout()" class="btn-action" style="width:100%; background:rgba(255,180,171,0.1); color:var(--danger); justify-content:flex-start; border:1px dashed var(--danger);"><i class="fa-solid fa-power-off"></i> DISCONNETTI</button>
+        </div>`;
+        sediMenu.innerHTML = html;
+    }
+
+    // 3. Verifica Integrità Selezione Sede
+    if (!State.activeSede && Object.keys(State.appStructure.sedi || {}).length > 0) {
         State.activeSede = Object.keys(State.appStructure.sedi)[0];
     }
+    const sedeData = State.activeSede ? State.appStructure.sedi[State.activeSede] : null;
     
-    // 3. Auto-Recovery del Turno Operativo (Previene schermi vuoti post-refresh)
-    if (State.activeSede && !State.activeFolder && State.appStructure.sedi[State.activeSede].folders) {
-        State.activeFolder = Object.keys(State.appStructure.sedi[State.activeSede].folders)[0] || null;
-    }
-
-    document.documentElement.setAttribute('data-theme', State.currentTheme || 'dark');
-    
-    applyRolePermissions();
-    renderSidebar();
-    renderFolders();
-    renderMainContent();
-};
-
-function applyRolePermissions() {
-    const isAdmin = State.activeProfile === 'admin';
-    const sedeStr = State.activeSede ? State.appStructure.sedi[State.activeSede] : null;
-    const profile = isAdmin ? null : (sedeStr && sedeStr.roles ? sedeStr.roles.find(r => r.id === State.activeProfile) : null);
-    
-    const userLabel = document.getElementById('current-user-label');
-    if (userLabel) {
-        userLabel.innerText = isAdmin ? 'ROOT (AMMINISTRATORE)' : (profile ? profile.name.toUpperCase() : 'OPERATORE');
-    }
-
-    const checklistContainer = document.getElementById('spoke-checklists-container');
-    if (checklistContainer) {
-        checklistContainer.innerHTML = '';
-        if (profile && (profile.linkApertura || profile.linkChiusura)) {
-            checklistContainer.style.display = 'flex';
-            if (profile.linkApertura) {
-                checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--success); color:#000; font-weight:800;" onclick="window.open('${profile.linkApertura}', '_blank')"><i class="fa-solid fa-sun"></i> CHECKLIST APERTURA</button>`;
-            }
-            if (profile.linkChiusura) {
-                checklistContainer.innerHTML += `<button class="btn-action solid" style="flex:1; padding:16px; background:var(--danger); color:#fff; font-weight:800;" onclick="window.open('${profile.linkChiusura}', '_blank')"><i class="fa-solid fa-moon"></i> CHECKLIST CHIUSURA</button>`;
-            }
-        } else {
-            checklistContainer.style.display = 'none';
-        }
-    }
-
-    const pasteBtn = document.getElementById('floating-paste-btn');
-    if (pasteBtn) {
-        pasteBtn.style.display = (isAdmin && State.clipboardSection) ? 'flex' : 'none';
-    }
-}
-
-function renderSidebar() {
-    const sediMenu = document.getElementById('sedi-menu');
-    const isAdmin = State.activeProfile === 'admin';
-    if (!sediMenu) return;
-    
-    sediMenu.innerHTML = '';
-
-    Object.keys(State.appStructure.sedi || {}).forEach(sedeId => {
-        const sede = State.appStructure.sedi[sedeId];
-        const div = document.createElement('div');
-        div.className = 'nav-item ' + (State.activeSede === sedeId ? 'active' : '');
-        
-        let editIcon = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:auto; color:var(--accent); padding:4px; font-size: 0.9rem;" onclick="event.stopPropagation(); window.editSede('${sedeId}');"></i>` : '';
-        div.innerHTML = `<div style="display:flex; align-items:center; width:100%;"><i class="fa-solid fa-shield" style="margin-right:8px;"></i> ${decayHTML(sede.name)} ${editIcon}</div>`;
-        
-        div.onclick = () => {
-            State.activeSede = sedeId;
-            State.activeFolder = Object.keys(sede.folders || {})[0] || null;
-            State.activeFilter = null; 
-            window.renderApp();
-            
-            if (window.innerWidth <= 768) {
-                const sidebar = document.getElementById('main-sidebar');
-                if (sidebar) sidebar.classList.remove('open');
-            }
-        };
-        sediMenu.appendChild(div);
-    });
-
-    if (isAdmin) {
-        sediMenu.innerHTML += `<div class="nav-item add-btn" onclick="window.openSedeModal()"><i class="fa-solid fa-plus"></i> Nuova Sede</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--accent); border:1px solid rgba(201,164,100,0.3); background:rgba(201,164,100,0.05);" onclick="window.openOperatorListModal()"><i class="fa-solid fa-users"></i> GESTIONE OPERATORI</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--nexus); border:1px solid rgba(155,89,182,0.3); background:rgba(155,89,182,0.05);" onclick="window.openCloudModal()"><i class="fa-solid fa-database"></i> CONFIGURA CLOUD VAULT</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--danger); border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.05);" onclick="window.togglePeakOverride()"><i class="fa-solid fa-fire"></i> ${State.peakOverride ? 'DISATTIVA ALTO CARICO' : 'FORZA ALTO CARICO (PEAK)'}</div>`;
-        sediMenu.innerHTML += `<div class="nav-item" style="margin-top:8px; color:var(--success); border:1px solid rgba(46, 204, 113, 0.3); background:rgba(46, 204, 113, 0.05);" onclick="window.shareApp()"><i class="fa-solid fa-share-nodes"></i> CONDIVIDI APP</div>`;
-    }
-
-    sediMenu.innerHTML += `<div class="nav-item" style="margin-top:16px; color:var(--danger); border:1px dashed var(--danger); background:rgba(231,76,60,0.1);" onclick="window.performLogout()"><i class="fa-solid fa-right-from-bracket"></i> DISCONNETTI</div>`;
-
-    const filtersMenu = document.getElementById('categories-filter-menu');
-    if (filtersMenu) {
-        filtersMenu.innerHTML = `<div class="nav-item ${!State.activeFilter ? 'active' : ''}" onclick="State.activeFilter=null; window.renderApp();"><i class="fa-solid fa-border-all"></i> Spazio Globale</div>`;
-        
-        if (State.activeSede && State.appStructure.sedi[State.activeSede]) {
-            const catMap = new Map();
-            Object.values(State.appStructure.sedi[State.activeSede].folders || {}).forEach(f => {
-                if (f.sections) {
-                    Object.values(f.sections).forEach(s => catMap.set(s.name, s.color));
-                }
-            });
-            
-            catMap.forEach((color, name) => {
-                filtersMenu.innerHTML += `<div class="nav-item ${State.activeFilter === name ? 'active' : ''}" onclick="State.activeFilter='${name}'; window.renderApp();"><span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${color}; margin-right:12px;"></span> ${decayHTML(name)}</div>`;
-            });
-        }
-    }
-}
-
-function renderFolders() {
-    const foldersMenu = document.getElementById('folders-menu');
-    const isAdmin = State.activeProfile === 'admin';
-    if (!foldersMenu) return;
-    
-    foldersMenu.innerHTML = '';
-
-    if (!State.activeSede || !State.appStructure.sedi[State.activeSede]) return;
-
-    Object.entries(State.appStructure.sedi[State.activeSede].folders || {}).forEach(([folderId, folder]) => {
-        const btn = document.createElement('button');
-        btn.className = 'folder-tab ' + (State.activeFolder === folderId ? 'active' : '');
-        
-        let editIconHtml = isAdmin ? `<i class="fa-solid fa-pen" style="margin-left:8px; font-size:0.8rem; opacity:0.7;" onclick="event.stopPropagation(); window.editFolder('${folderId}');"></i>` : '';
-        btn.innerHTML = `${decayHTML(folder.name)} ${editIconHtml}`;
-        
-        btn.onclick = () => { 
-            State.activeFolder = folderId; 
-            State.activeFilter = null; 
-            window.renderApp(); 
-        };
-        foldersMenu.appendChild(btn);
-    });
-
-    if (isAdmin) {
-        foldersMenu.innerHTML += `<button class="folder-tab add" style="border-style:dashed;" onclick="window.openFolderModal()"><i class="fa-solid fa-plus"></i> Nuovo Turno</button>`;
-    }
-}
-
-function renderMainContent() {
-    const content = document.getElementById('main-content');
+    // 4. Intestazione Principale
     const headerTitle = document.getElementById('header-title');
-    const isAdmin = State.activeProfile === 'admin';
-    
-    if (!content || !headerTitle) return;
-    content.innerHTML = '';
+    if (headerTitle) {
+        headerTitle.innerText = sedeData ? sedeData.name : 'SISTEMA VERGINE';
+    }
 
-    if (!State.activeSede || !State.activeFolder) {
-        headerTitle.innerText = "SISTEMA VERGINE / NESSUN TURNO ATTIVO";
+    // 5. Menu Turni (Folder Tabs)
+    const foldersMenu = document.getElementById('folders-menu');
+    const mainContent = document.getElementById('main-content');
+    
+    if (!sedeData) {
+        if (foldersMenu) foldersMenu.innerHTML = '';
+        if (mainContent) mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fa-solid fa-triangle-exclamation" style="font-size:3rem; margin-bottom:16px; color:var(--accent);"></i><br>Nessuna Sede configurata.<br>Accedi come ROOT per inizializzare il sistema.</div>`;
         return;
     }
 
-    const sedeName = State.appStructure.sedi[State.activeSede].name;
-    const folderName = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].name;
-    
-    let killSwitchHtml = isAdmin ? `<button class="btn-action solid" style="background:var(--danger); color:var(--bg); border:none; padding:6px 12px; margin-left:16px; font-size:0.75rem; width:auto; display:inline-block;" onclick="window.nukeCurrentTurnLogic()"><i class="fa-solid fa-radiation"></i> RESET TURNO</button>` : '';
-    headerTitle.innerHTML = `${decayHTML(sedeName)} // ${decayHTML(folderName)} ${killSwitchHtml}`;
-
-    const currentDay = new Date().getDay(); 
-    const sections = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections || {};
-
-    Object.entries(sections).forEach(([sectionId, section]) => {
-        if (State.activeFilter && section.name !== State.activeFilter) return;
-
-        let itemsToRender = [...(section.items || [])];
-        
-        // Algoritmo di filtraggio dei giorni (Bypassato se Peak Override è attivo)
-        itemsToRender = itemsToRender.filter(item => {
-            if (State.peakOverride) return true; 
-            if (!item.days || item.days.length === 0) return true; 
-            return item.days.includes(currentDay);
+    if (foldersMenu) {
+        let fHtml = '';
+        const folders = sedeData.folders || {};
+        Object.keys(folders).forEach(fId => {
+            const isActive = State.activeFolder === fId ? 'active' : '';
+            fHtml += `<div class="folder-tab ${isActive}" onclick="window.switchFolder('${fId}')">${folders[fId].name.toUpperCase()}</div>`;
         });
-
-        // Ordinamento asincrono FIFO basato sulla data di scadenza ravvicinata
-        itemsToRender.sort((a, b) => {
-            if (!a.expiry) return 1;
-            if (!b.expiry) return -1;
-            return new Date(a.expiry) - new Date(b.expiry);
-        });
-
-        if (itemsToRender.length === 0 && !isAdmin) return; 
-
-        const sectionDiv = document.createElement('div');
-        sectionDiv.className = 'section-container';
-        sectionDiv.style.borderTop = `4px solid ${section.color}`;
-        
-        let adminActions = isAdmin ? `<div style="display:flex; gap:16px;"><i class="fa-solid fa-copy" style="cursor:pointer; color:var(--text-muted);" onclick="window.copySection('${sectionId}')"></i><i class="fa-solid fa-pen" style="cursor:pointer; color:var(--text-muted);" onclick="window.editSection('${sectionId}')"></i></div>` : '';
-        sectionDiv.innerHTML = `<div class="section-header"><h3 style="color:${section.color}; text-transform:uppercase; letter-spacing:1px; margin:0;">${decayHTML(section.name)}</h3>${adminActions}</div>`;
-
-        itemsToRender.forEach(item => {
-            const stateKey = `${State.activeSede}_${State.activeFolder}_${sectionId}_${item.id}`;
-            const itemState = State.appState[stateKey] || { done: false, n_op: '', note: '' };
-            
-            let targetIdeal = 0;
-            if (item.type === 'magazzino') {
-                if (item.dailyIdeals && item.dailyIdeals.length === 7) {
-                    targetIdeal = State.peakOverride ? Math.max(...item.dailyIdeals) : item.dailyIdeals[currentDay];
-                } else {
-                    targetIdeal = item.idealQty || 0; 
-                }
-            }
-
-            let typeBadge = item.type === 'magazzino' ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:#3498db20; color:#3498db;"><i class="fa-solid fa-calculator"></i> SOGLIA: ${targetIdeal} ${decayHTML(item.uom || 'pz')}</span>` : '';
-            let supplierBadge = item.supplier ? `<span style="font-size:0.7rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);"><i class="fa-solid fa-truck"></i> ${decayHTML(item.supplier)}</span>` : '';
-            let expiryBadge = item.expiry ? `<span style="font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px; background:rgba(231,76,60,0.1); color:var(--danger);"><i class="fa-regular fa-clock"></i> SCAD: ${new Date(item.expiry).toLocaleDateString('it-IT')}</span>` : '';
-
-            let controlsHtml = '';
-            if (item.type === 'magazzino') {
-                controlsHtml = `
-                <div class="item-controls">
-                    <div style="display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:2px 4px;">
-                        <button onclick="window.hf_stepQty('${stateKey}', -1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">-</button>
-                        <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="0" style="width:50px; text-align:center; border:none; background:none; color:var(--text-main); font-weight:700; font-size:1.1rem;" onchange="window.hf_updateQty('${stateKey}', this.value)">
-                        <button onclick="window.hf_stepQty('${stateKey}', 1)" style="background:none; border:none; color:var(--accent); font-size:1.2rem; font-weight:800; width:32px; height:32px; cursor:pointer;">+</button>
-                    </div>
-                    <span class="unit-label" style="font-weight:700; color:var(--text-muted); min-width:30px;">${decayHTML(item.uom || 'pz')}</span>
-                </div>`;
-            } else {
-                let checkboxHtml = itemState.done ? '<i class="fa-solid fa-check"></i>' : '';
-                controlsHtml = `
-                <div class="item-controls">
-                    <div class="input-group-inline">
-                        <input type="number" inputmode="decimal" class="qty-input" value="${itemState.n_op || ''}" placeholder="Qt." onchange="window.hf_updateQty('${stateKey}', this.value)">
-                        <span class="unit-label">${decayHTML(item.uom || 'pz')}</span>
-                    </div>
-                    <div class="custom-checkbox ${itemState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">${checkboxHtml}</div>
-                </div>`;
-            }
-
-            const itemDiv = document.createElement('div');
-            itemDiv.className = `item-row ${itemState.done ? 'done' : ''}`;
-            
-            let itemEditBtn = isAdmin ? `<button style="background:none; border:none; color:var(--accent); margin-left:auto; padding:8px; cursor:pointer;" onclick="window.hf_editItemModal('${sectionId}', '${item.id}')"><i class="fa-solid fa-pen"></i></button>` : '';
-
-            itemDiv.innerHTML = `
-                <div class="item-main">
-                    <div class="item-name-group" style="flex:1;">
-                        <span class="item-name">${decayHTML(item.name)}</span>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">${typeBadge} ${supplierBadge} ${expiryBadge}</div>
-                    </div>
-                    ${itemEditBtn}
-                    ${controlsHtml}
-                </div>
-                <div class="item-sub" style="margin-top: 8px;">
-                    <input type="text" class="note-input" value="${decayHTML(itemState.note || '')}" placeholder="Aggiungi nota operativa..." onchange="window.hf_updateNote('${stateKey}', this.value)">
-                </div>`;
-
-            sectionDiv.appendChild(itemDiv);
-        });
-
-        if (isAdmin) {
-            sectionDiv.innerHTML += `<button class="btn-action" style="margin:16px; width:calc(100% - 32px); border:1px dashed var(--border);" onclick="window.hf_openItemModal('${sectionId}')"><i class="fa-solid fa-plus"></i> AGGIUNGI PRODOTTO</button>`;
+        if (State.activeProfile === 'admin') {
+            fHtml += `<div class="folder-tab" onclick="window.openModal_Folder()" style="background:transparent; border:1px dashed var(--accent); color:var(--accent); cursor:pointer;"><i class="fa-solid fa-plus"></i> NUOVO TURNO</div>`;
         }
-        content.appendChild(sectionDiv);
-    });
-
-    if (isAdmin && !State.activeFilter) {
-        content.innerHTML += `<button class="btn-action" style="width:100%; margin-top:24px; border:1px dashed var(--text-muted);" onclick="window.openSectionModal()"><i class="fa-solid fa-layer-group"></i> CREA NUOVA CELLA LOGICA</button>`;
+        foldersMenu.innerHTML = fHtml;
     }
-}
 
-/**
- * ============================================================================
- * SANITIZZATORE ANTI-XSS LOCALE (PROTEZIONE MATRICE DOM)
- * ============================================================================
- */
-function decayHTML(str) {
-    if (!str) return '';
-    return str.replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/"/g, "&quot;")
-              .replace(/'/g, "&#039;");
-}
+    if (!State.activeFolder && Object.keys(sedeData.folders || {}).length > 0) {
+        State.activeFolder = Object.keys(sedeData.folders)[0];
+    }
+
+    const folderData = State.activeFolder ? sedeData.folders[State.activeFolder] : null;
+
+    if (!folderData) {
+        if (mainContent) mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">Seleziona o crea un Turno per iniziare.</div>`;
+        return;
+    }
+
+    // 6. Generazione Celle Logiche (Sezioni e Prodotti)
+    if (mainContent) {
+        let mHtml = '';
+        const sections = folderData.sections || {};
+        const activeFilter = State.activeCategoryFilter || 'ALL'; // Filtro visivo
+        
+        Object.keys(sections).forEach(secId => {
+            const sec = sections[secId];
+            if (activeFilter !== 'ALL' && activeFilter !== sec.name) return; // Salta se escluso dal filtro
+
+            const sColor = sec.color || 'var(--accent)';
+            
+            mHtml += `<div class="section-container" style="border-left: 4px solid ${sColor};">
+                <div class="section-header">
+                    <h3 style="color:${sColor}; font-weight:900; font-size:1.2rem; text-transform:uppercase; margin:0; display:flex; align-items:center; gap:8px;">
+                        ${sec.icon ? `<i class="${sec.icon}"></i>` : ''} ${sec.name}
+                    </h3>
+                    ${State.activeProfile === 'admin' ? `
+                        <div style="display:flex; gap:8px;">
+                            <button onclick="window.openModal_Item('${secId}')" class="btn-action solid" style="padding:8px 16px; font-size:0.8rem;"><i class="fa-solid fa-plus"></i> AGGIUNGI</button>
+                            <button onclick="window.copySectionLogic('${secId}')" class="btn-action" style="padding:8px; background:var(--surface-variant);"><i class="fa-solid fa-copy"></i></button>
+                            <button onclick="window.deleteSection('${secId}')" class="btn-action" style="padding:8px; background:var(--danger); color:#000;"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="items-container">`;
+
+            const items = sec.items || {};
+            const sortedItems = Object.keys(items).sort((a,b) => (items[a].order||0) - (items[b].order||0));
+            
+            sortedItems.forEach(itemId => {
+                const it = items[itemId];
+                const stateKey = `${State.activeSede}_${State.activeFolder}_${secId}_${itemId}`;
+                const itState = State.appState[stateKey] || { n_op: '', done: false, note: '' };
+                const isDoneClass = itState.done ? 'done' : '';
+                
+                mHtml += `<div class="item-row ${isDoneClass}">
+                    <div class="item-main">
+                        <div class="item-name-group">
+                            <span class="item-name" style="color:var(--text-main);">${it.name.toUpperCase()}</span>
+                            ${it.type === 'magazzino' ? `<span style="font-size:0.75rem; color:var(--accent); font-weight:800;">TARGET TARGET: ${State.peakOverride ? (it.th_peak||0) : (it.th_std||0)} ${it.unit||'pz'}</span>` : ''}
+                        </div>`;
+
+                if (it.type === 'magazzino') {
+                    mHtml += `
+                        <div class="item-controls">
+                            <button class="btn-action" onclick="window.hf_stepQty('${stateKey}', -1)" style="padding:10px 16px; background:var(--surface); border:1px solid var(--surface-variant);"><i class="fa-solid fa-minus"></i></button>
+                            <input type="number" inputmode="numeric" value="${itState.n_op}" onchange="window.hf_updateQty('${stateKey}', this.value)" style="width:70px; text-align:center; font-size:1.1rem; font-weight:900; background:var(--bg); border:none; border-radius:var(--radius-sm); color:var(--text-main); padding:10px;">
+                            <button class="btn-action" onclick="window.hf_stepQty('${stateKey}', 1)" style="padding:10px 16px; background:var(--surface); border:1px solid var(--surface-variant);"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    `;
+                } else if (it.type === 'task') {
+                    mHtml += `
+                        <div class="item-controls">
+                            <div class="custom-checkbox ${itState.done ? 'checked' : ''}" onclick="window.toggleDone('${stateKey}')">
+                                ${itState.done ? '<i class="fa-solid fa-check"></i>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                mHtml += `</div>`; // Chiude item-main
+
+                if (State.activeProfile === 'admin') {
+                    mHtml += `
+                    <div style="display:flex; gap:8px; margin-top:8px; border-top:1px dashed rgba(255,255,255,0.05); padding-top:8px;">
+                        <button onclick="window.deleteItem('${secId}', '${itemId}')" class="btn-action" style="padding:6px 12px; font-size:0.75rem; background:rgba(255,180,171,0.1); color:var(--danger); border:none;"><i class="fa-solid fa-trash"></i> Rimuovi</button>
+                    </div>`;
+                }
+                
+                mHtml += `</div>`; // Chiude item-row
+            });
+
+            mHtml += `</div></div>`; // Chiude items-container e section-container
+        });
+
+        if (State.activeProfile === 'admin') {
+            mHtml += `
+            <div style="margin-top:24px; text-align:center;">
+                <button onclick="window.openModal_Section()" class="btn-action" style="border:2px dashed var(--surface-variant); background:transparent; color:var(--text-muted); width:100%; padding:16px;">
+                    <i class="fa-solid fa-plus"></i> CREA NUOVA CELLA LOGICA
+                </button>
+            </div>`;
+        }
+
+        mainContent.innerHTML = mHtml;
+        
+        // 7. Render Filtri Categorie nella Sidebar
+        const catMenu = document.getElementById('categories-filter-menu');
+        if (catMenu) {
+            let catHtml = `<div class="nav-item ${activeFilter === 'ALL' ? 'active' : ''}" onclick="window.setCategoryFilter('ALL')"><i class="fa-solid fa-layer-group" style="width:20px;"></i> MOSTRA TUTTO</div>`;
+            Object.keys(sections).forEach(secId => {
+                const sec = sections[secId];
+                catHtml += `<div class="nav-item ${activeFilter === sec.name ? 'active' : ''}" onclick="window.setCategoryFilter('${sec.name}')" style="border-left:3px solid ${sec.color || 'var(--accent)'}; margin-left:4px;"><i class="fa-solid fa-filter" style="width:20px; font-size:0.8em;"></i> ${sec.name.toUpperCase()}</div>`;
+            });
+            catMenu.innerHTML = catHtml;
+        }
+    }
+};
+
+window.setCategoryFilter = (filterName) => {
+    State.activeCategoryFilter = filterName;
+    window.renderApp();
+};
