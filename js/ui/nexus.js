@@ -1,595 +1,363 @@
 // File: js/ui/nexus.js
 import { State } from '../core/state.js';
-import { lazzaro_saveState, lazzaro_wipeVault } from '../core/lazzaro.js';
+import { Cerbero } from '../core/cerbero.js';
+import { lazzaro_saveState } from '../core/lazzaro.js';
+import { Ledger } from '../core/ledger.js';
 
-/**
- * ============================================================================
- * MOTORE MODALI (INIEZIONE DINAMICA SUL LAYER OVERLAY)
- * ============================================================================
- */
-function showModal(htmlContent) {
-    const layer = document.getElementById('modal-layer');
-    if (layer) {
-        layer.innerHTML = htmlContent;
-        layer.style.display = 'flex';
+const getModalLayer = () => {
+    let layer = document.getElementById('modal-layer');
+    if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'modal-layer';
+        layer.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:9999; justify-content:center; align-items:center; padding:20px; box-sizing:border-box;';
+        document.body.appendChild(layer);
     }
-}
-
-window.closeModal = () => {
-    const layer = document.getElementById('modal-layer');
-    if (layer) {
-        layer.style.display = 'none';
-        layer.innerHTML = '';
-    }
+    return layer;
 };
 
-/**
- * Funzione di utilità per generare ID univoci per i nuovi elementi
- */
-function generateId(prefix) {
-    return prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-}
+const closeModal = () => { getModalLayer().style.display = 'none'; };
 
 /**
  * ============================================================================
- * GESTIONE RETE DISTRIBUITA (SEDI / HUB)
+ * 1. GESTIONE SEDI (HUB)
  * ============================================================================
  */
-window.openSedeModal = (sedeId = null) => {
-    const sede = sedeId ? State.appStructure.sedi[sedeId] : null;
-    const title = sedeId ? 'MODIFICA SEDE' : 'NUOVA SEDE';
-    const nameVal = sede ? sede.name : '';
-
+window.openModal_Sede = () => {
+    if (State.activeProfile !== 'admin') return;
     const html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:400px; border:1px solid var(--accent); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-            <h3 style="color:var(--accent); margin-top:0; font-weight:900;"><i class="fa-solid fa-shield"></i> ${title}</h3>
-            <div class="input-group" style="margin-bottom:20px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">NOME HUB OPERATIVO</label>
-                <input type="text" id="modal-sede-name" placeholder="Es. Roma Centro" value="${nameVal}" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-            </div>
-            <div style="display:flex; justify-content:space-between; gap:12px;">
-                ${sedeId ? `<button onclick="window.deleteSede('${sedeId}')" style="background:rgba(231,76,60,0.1); color:var(--danger); border:1px dashed var(--danger); padding:10px 16px; border-radius:6px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>` : '<div></div>'}
-                <div style="display:flex; gap:8px;">
-                    <button onclick="window.closeModal()" style="background:none; color:var(--text-muted); border:1px solid var(--border); padding:10px 16px; border-radius:6px; cursor:pointer; font-weight:800;">ANNULLA</button>
-                    <button onclick="window.saveSede('${sedeId || ''}')" style="background:var(--accent); color:#000; font-weight:900; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">SALVA</button>
+        <div style="background:var(--surface); padding:24px; border-radius:var(--radius-lg); width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+            <h3 style="color:var(--accent); margin-top:0;">NUOVA SEDE OPERATIVA</h3>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <input type="text" id="sede-name" placeholder="Nome Sede (es. Fiumicino)" style="width:100%;">
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-top:8px;">
+                    <button onclick="window.closeModal()" class="btn-action" style="background:var(--surface-variant); flex:1;">Annulla</button>
+                    <button onclick="window.saveSede()" class="btn-action solid" style="flex:1;">Salva</button>
                 </div>
             </div>
         </div>
     `;
-    showModal(html);
+    const layer = getModalLayer(); layer.innerHTML = html; layer.style.display = 'flex';
 };
 
-window.editSede = (sedeId) => { window.openSedeModal(sedeId); };
-
-window.saveSede = async (sedeId) => {
-    const nameInput = document.getElementById('modal-sede-name').value.trim();
-    if (!nameInput) { alert("Il nome della Sede è obbligatorio."); return; }
-
-    if (sedeId) {
-        State.appStructure.sedi[sedeId].name = nameInput;
-    } else {
-        const newId = generateId('sede');
-        State.appStructure.sedi[newId] = {
-            name: nameInput,
-            roles: [],
-            folders: {}
-        };
-        State.activeSede = newId;
-        State.activeFolder = null;
-    }
-
+window.saveSede = async () => {
+    const name = document.getElementById('sede-name').value.trim();
+    if (!name) return;
+    const id = 'sede_' + Date.now();
+    State.appStructure.sedi[id] = { id, name, folders: {}, roles: [] };
+    State.activeSede = id;
     await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
+    await Ledger.logAction('admin', 'CREAZIONE_SEDE', { id, name });
+    closeModal(); window.renderApp();
 };
 
-window.deleteSede = async (sedeId) => {
-    if (!confirm("ATTENZIONE: Eliminare la Sede distruggerà irreversibilmente tutti i Turni, i Prodotti e gli Operatori associati. Procedere?")) return;
-    
-    delete State.appStructure.sedi[sedeId];
-    if (State.activeSede === sedeId) {
-        State.activeSede = Object.keys(State.appStructure.sedi)[0] || null;
-        State.activeFolder = null;
-    }
-    
-    await lazzaro_saveState();
-    window.closeModal();
+window.switchSede = (sedeId) => {
+    State.activeSede = sedeId;
+    State.activeFolder = null; // Resetta il turno quando cambi sede
     window.renderApp();
+    if (window.toggleMobileMenu) {
+        const sidebar = document.getElementById('main-sidebar');
+        if (sidebar && sidebar.classList.contains('open')) window.toggleMobileMenu();
+    }
 };
 
 /**
  * ============================================================================
- * GESTIONE TURNI OPERATIVI (FOLDERS)
+ * 2. GESTIONE OPERATORI E SQUADRE (MATRIOSKA ROLES)
  * ============================================================================
  */
-window.openFolderModal = (folderId = null) => {
-    if (!State.activeSede) { alert("Devi prima creare o selezionare una Sede."); return; }
-    
+window.openModal_Roles = () => {
+    if (State.activeProfile !== 'admin') return;
     const sede = State.appStructure.sedi[State.activeSede];
-    const folder = folderId ? sede.folders[folderId] : null;
-    const title = folderId ? 'MODIFICA TURNO' : 'NUOVO TURNO OPERATIVO';
-    const nameVal = folder ? folder.name : '';
-
-    const html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:400px; border:1px solid var(--accent); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-            <h3 style="color:var(--accent); margin-top:0; font-weight:900;"><i class="fa-solid fa-folder-open"></i> ${title}</h3>
-            <div class="input-group" style="margin-bottom:20px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">NOME TURNO</label>
-                <input type="text" id="modal-folder-name" placeholder="Es. Mattina / Chiusura" value="${nameVal}" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
+    if (!sede) { if (window.showToast) window.showToast("Crea prima una Sede.", "error"); return; }
+    
+    let rolesHtml = '';
+    (sede.roles || []).forEach(r => {
+        rolesHtml += `
+        <div style="background:var(--surface-variant); padding:12px; border-radius:var(--radius-sm); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:900; color:var(--text-main);">${r.name.toUpperCase()}</div>
+                <div style="font-size:0.75rem; color:var(--accent);">${r.squadra ? r.squadra.toUpperCase() : 'Nessuna Squadra'}</div>
             </div>
-            <div style="display:flex; justify-content:space-between; gap:12px;">
-                ${folderId ? `<button onclick="window.deleteFolder('${folderId}')" style="background:rgba(231,76,60,0.1); color:var(--danger); border:1px dashed var(--danger); padding:10px 16px; border-radius:6px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>` : '<div></div>'}
-                <div style="display:flex; gap:8px;">
-                    <button onclick="window.closeModal()" style="background:none; color:var(--text-muted); border:1px solid var(--border); padding:10px 16px; border-radius:6px; cursor:pointer; font-weight:800;">ANNULLA</button>
-                    <button onclick="window.saveFolder('${folderId || ''}')" style="background:var(--accent); color:#000; font-weight:900; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">SALVA</button>
-                </div>
-            </div>
-        </div>
-    `;
-    showModal(html);
-};
-
-window.editFolder = (folderId) => { window.openFolderModal(folderId); };
-
-window.saveFolder = async (folderId) => {
-    const nameInput = document.getElementById('modal-folder-name').value.trim();
-    if (!nameInput) { alert("Il nome del Turno è obbligatorio."); return; }
-
-    const sede = State.appStructure.sedi[State.activeSede];
-    if (!sede.folders) sede.folders = {};
-
-    if (folderId) {
-        sede.folders[folderId].name = nameInput;
-    } else {
-        const newId = generateId('fld');
-        sede.folders[newId] = {
-            name: nameInput,
-            sections: {}
-        };
-        State.activeFolder = newId;
-    }
-
-    await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
-};
-
-window.deleteFolder = async (folderId) => {
-    if (!confirm("ATTENZIONE: Eliminare il Turno distruggerà irreversibilmente tutte le Celle Logiche (Sezioni) e i Prodotti in esso contenuti. Procedere?")) return;
-    
-    const sede = State.appStructure.sedi[State.activeSede];
-    delete sede.folders[folderId];
-    
-    if (State.activeFolder === folderId) {
-        State.activeFolder = Object.keys(sede.folders)[0] || null;
-    }
-    
-    await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
-};
-
-window.nukeCurrentTurnLogic = async () => {
-    if (!State.activeSede || !State.activeFolder) return;
-    if (!confirm("PERICOLO: Questa azione azzererà TUTTE LE QUANTITÀ, gli stati (fatto/non fatto) e le note inserite dagli operatori in questo specifico turno. Vuoi procedere?")) return;
-    
-    const prefix = `${State.activeSede}_${State.activeFolder}_`;
-    Object.keys(State.appState).forEach(key => {
-        if (key.startsWith(prefix)) {
-            delete State.appState[key];
-        }
+            <button onclick="window.deleteRole('${r.id}')" class="btn-action" style="padding:6px 12px; background:rgba(255,180,171,0.1); color:var(--danger); border:none;"><i class="fa-solid fa-trash"></i></button>
+        </div>`;
     });
 
-    await lazzaro_saveState();
-    window.renderApp();
-    if (window.showToast) window.showToast("Dati operativi del turno azzerati.", "success");
-};
-/**
- * ============================================================================
- * GESTIONE CELLE LOGICHE (SEZIONI/CATEGORIE)
- * ============================================================================
- */
-window.openSectionModal = (sectionId = null) => {
-    if (!State.activeSede || !State.activeFolder) return;
-    const sede = State.appStructure.sedi[State.activeSede];
-    const section = sectionId ? sede.folders[State.activeFolder].sections[sectionId] : null;
-    const title = sectionId ? 'MODIFICA CELLA LOGICA' : 'NUOVA CELLA LOGICA';
-    const nameVal = section ? section.name : '';
-    const colorVal = section ? section.color : '#3498db';
-
     const html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:400px; border:1px solid var(--accent); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-            <h3 style="color:var(--accent); margin-top:0; font-weight:900;"><i class="fa-solid fa-layer-group"></i> ${title}</h3>
-            
-            <div class="input-group" style="margin-bottom:12px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">NOME REPARTO/CATEGORIA</label>
-                <input type="text" id="modal-sec-name" value="${nameVal}" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-            </div>
-            
-            <div class="input-group" style="margin-bottom:20px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">COLORE IDENTIFICATIVO</label>
-                <input type="color" id="modal-sec-color" value="${colorVal}" style="width:100%; height:40px; border:none; border-radius:6px; cursor:pointer; background:none;">
-            </div>
-
-            <div style="display:flex; justify-content:space-between; gap:12px;">
-                ${sectionId ? `<button onclick="window.deleteSection('${sectionId}')" style="background:rgba(231,76,60,0.1); color:var(--danger); border:1px dashed var(--danger); padding:10px 16px; border-radius:6px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>` : '<div></div>'}
-                <div style="display:flex; gap:8px;">
-                    <button onclick="window.closeModal()" style="background:none; color:var(--text-muted); border:1px solid var(--border); padding:10px 16px; border-radius:6px; cursor:pointer; font-weight:800;">ANNULLA</button>
-                    <button onclick="window.saveSection('${sectionId || ''}')" style="background:var(--accent); color:#000; font-weight:900; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">SALVA</button>
-                </div>
-            </div>
-        </div>
-    `;
-    showModal(html);
-};
-
-window.editSection = (sectionId) => { window.openSectionModal(sectionId); };
-
-window.saveSection = async (sectionId) => {
-    const nameInput = document.getElementById('modal-sec-name').value.trim();
-    const colorInput = document.getElementById('modal-sec-color').value;
-    if (!nameInput) { alert("Il nome della Cella è obbligatorio."); return; }
-
-    const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
-    if (!folder.sections) folder.sections = {};
-
-    if (sectionId) {
-        folder.sections[sectionId].name = nameInput;
-        folder.sections[sectionId].color = colorInput;
-    } else {
-        const newId = generateId('sec');
-        folder.sections[newId] = {
-            name: nameInput,
-            color: colorInput,
-            items: []
-        };
-    }
-
-    await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
-};
-
-window.deleteSection = async (sectionId) => {
-    if (!confirm("ATTENZIONE: Eliminare questa Cella Logica distruggerà tutti i Prodotti al suo interno. Procedere?")) return;
-    
-    const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
-    delete folder.sections[sectionId];
-    
-    await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
-};
-
-window.copySection = (sectionId) => {
-    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId];
-    State.clipboardSection = JSON.parse(JSON.stringify(section)); // Clonazione profonda
-    window.renderApp();
-    if (window.showToast) window.showToast("Cella Logica copiata negli appunti di sistema.", "info");
-};
-
-window.pasteSectionLogic = async () => {
-    if (!State.clipboardSection || !State.activeSede || !State.activeFolder) return;
-    
-    const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
-    if (!folder.sections) folder.sections = {};
-    
-    const newId = generateId('sec');
-    const newSection = JSON.parse(JSON.stringify(State.clipboardSection));
-    newSection.name = newSection.name + " (Copia)";
-    
-    // Rigenera tutti gli ID interni dei prodotti per evitare collisioni di stato
-    if (newSection.items) {
-        newSection.items.forEach(item => { item.id = generateId('itm'); });
-    }
-    
-    folder.sections[newId] = newSection;
-    await lazzaro_saveState();
-    window.renderApp();
-    if (window.showToast) window.showToast("Cella Logica incollata con successo.", "success");
-};
-
-/**
- * ============================================================================
- * GESTIONE PRODOTTI / TASK (ITEMS)
- * ============================================================================
- */
-window.hf_openItemModal = (sectionId, itemId = null) => {
-    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId];
-    const item = itemId ? section.items.find(i => i.id === itemId) : null;
-    const title = itemId ? 'MODIFICA ELEMENTO' : 'NUOVO ELEMENTO';
-    
-    const iName = item ? item.name : '';
-    const iType = item ? item.type : 'magazzino';
-    const iUom = item ? item.uom : 'pz';
-    const iSupplier = item ? (item.supplier || '') : '';
-    const iExpiry = item ? (item.expiry || '') : '';
-    
-    const dIdeals = item && item.dailyIdeals && item.dailyIdeals.length === 7 ? item.dailyIdeals : [0,0,0,0,0,0,0];
-    const days = item && item.days ? item.days : [0,1,2,3,4,5,6]; // Default: tutti i giorni
-
-    const html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:500px; max-height:90vh; overflow-y:auto; border:1px solid var(--accent); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-            <h3 style="color:var(--accent); margin-top:0; font-weight:900;"><i class="fa-solid fa-cube"></i> ${title}</h3>
-            
-            <div class="input-group" style="margin-bottom:12px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">NOME PRODOTTO / TASK</label>
-                <input type="text" id="modal-item-name" value="${iName}" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-            </div>
-
-            <div style="display:flex; gap:12px; margin-bottom:12px;">
-                <div class="input-group" style="flex:1;">
-                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">TIPO</label>
-                    <select id="modal-item-type" onchange="window.hf_toggleItemTypeUi()" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px;">
-                        <option value="magazzino" ${iType === 'magazzino' ? 'selected' : ''}>Controllo Magazzino</option>
-                        <option value="task" ${iType === 'task' ? 'selected' : ''}>Operazione (Task)</option>
-                    </select>
-                </div>
-                <div class="input-group" style="flex:1;">
-                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">UNITÀ DI MISURA</label>
-                    <input type="text" id="modal-item-uom" value="${iUom}" placeholder="es. pz, kg, ct" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-                </div>
-            </div>
-
-            <div style="display:flex; gap:12px; margin-bottom:16px;">
-                <div class="input-group" style="flex:1;">
-                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">FORNITORE (Opzionale)</label>
-                    <input type="text" id="modal-item-supplier" value="${iSupplier}" placeholder="es. MARR" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-                </div>
-                <div class="input-group" style="flex:1;">
-                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">SCADENZA (Opzionale)</label>
-                    <input type="date" id="modal-item-expiry" value="${iExpiry}" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-                </div>
-            </div>
-
-            <div id="modal-item-ideals-container" style="${iType === 'magazzino' ? 'display:block;' : 'display:none;'} background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; border:1px solid var(--border); margin-bottom:16px;">
-                <label style="color:var(--accent); font-size:0.8rem; font-weight:900; display:block; margin-bottom:8px;"><i class="fa-solid fa-calendar-week"></i> SOGLIE IDEALI GIORNALIERE</label>
-                <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:4px;">
-                    ${['DOM','LUN','MAR','MER','GIO','VEN','SAB'].map((d, idx) => `
-                        <div style="text-align:center;">
-                            <div style="font-size:0.65rem; color:var(--text-muted); font-weight:800; margin-bottom:2px;">${d}</div>
-                            <input type="number" id="ideal-${idx}" value="${dIdeals[idx]}" style="width:100%; padding:6px; text-align:center; background:rgba(0,0,0,0.4); border:1px solid var(--border); color:var(--text-main); border-radius:4px; box-sizing:border-box; font-size:0.9rem;">
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-
-            <div style="background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; border:1px solid var(--border); margin-bottom:20px;">
-                <label style="color:var(--accent); font-size:0.8rem; font-weight:900; display:block; margin-bottom:8px;"><i class="fa-solid fa-eye"></i> GIORNI DI VISIBILITÀ (PROGRAMMAZIONE)</label>
-                <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                    ${['DOM','LUN','MAR','MER','GIO','VEN','SAB'].map((d, idx) => `
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.8rem; color:var(--text-main); cursor:pointer;">
-                            <input type="checkbox" class="modal-item-day" value="${idx}" ${days.includes(idx) ? 'checked' : ''}> ${d}
-                        </label>
-                    `).join('')}
-                </div>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; gap:12px;">
-                ${itemId ? `<button onclick="window.hf_deleteItem('${sectionId}', '${itemId}')" style="background:rgba(231,76,60,0.1); color:var(--danger); border:1px dashed var(--danger); padding:10px 16px; border-radius:6px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>` : '<div></div>'}
-                <div style="display:flex; gap:8px;">
-                    <button onclick="window.closeModal()" style="background:none; color:var(--text-muted); border:1px solid var(--border); padding:10px 16px; border-radius:6px; cursor:pointer; font-weight:800;">ANNULLA</button>
-                    <button onclick="window.hf_saveItem('${sectionId}', '${itemId || ''}')" style="background:var(--accent); color:#000; font-weight:900; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">SALVA</button>
-                </div>
-            </div>
-        </div>
-    `;
-    showModal(html);
-};
-
-window.hf_editItemModal = (sectionId, itemId) => { window.hf_openItemModal(sectionId, itemId); };
-
-window.hf_toggleItemTypeUi = () => {
-    const type = document.getElementById('modal-item-type').value;
-    const container = document.getElementById('modal-item-ideals-container');
-    if (container) container.style.display = type === 'magazzino' ? 'block' : 'none';
-};
-
-window.hf_saveItem = async (sectionId, itemId) => {
-    const nameInput = document.getElementById('modal-item-name').value.trim();
-    if (!nameInput) { alert("Il nome dell'elemento è obbligatorio."); return; }
-
-    const typeInput = document.getElementById('modal-item-type').value;
-    const uomInput = document.getElementById('modal-item-uom').value.trim() || 'pz';
-    const supplierInput = document.getElementById('modal-item-supplier').value.trim();
-    const expiryInput = document.getElementById('modal-item-expiry').value;
-
-    const dailyIdeals = [];
-    for (let i = 0; i < 7; i++) {
-        const val = parseFloat(document.getElementById(`ideal-${i}`).value);
-        dailyIdeals.push(isNaN(val) ? 0 : val);
-    }
-
-    const days = [];
-    document.querySelectorAll('.modal-item-day').forEach(cb => {
-        if (cb.checked) days.push(parseInt(cb.value));
-    });
-
-    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId];
-    if (!section.items) section.items = [];
-
-    const itemData = {
-        name: nameInput,
-        type: typeInput,
-        uom: uomInput,
-        supplier: supplierInput,
-        expiry: expiryInput,
-        dailyIdeals: dailyIdeals,
-        days: days
-    };
-
-    if (itemId) {
-        const idx = section.items.findIndex(i => i.id === itemId);
-        if (idx > -1) {
-            itemData.id = itemId;
-            section.items[idx] = itemData;
-        }
-    } else {
-        itemData.id = generateId('itm');
-        section.items.push(itemData);
-    }
-
-    await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
-};
-
-window.hf_deleteItem = async (sectionId, itemId) => {
-    if (!confirm("Eliminare definitivamente questo elemento?")) return;
-    
-    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[sectionId];
-    section.items = section.items.filter(i => i.id !== itemId);
-    
-    await lazzaro_saveState();
-    window.closeModal();
-    window.renderApp();
-};
-
-/**
- * ============================================================================
- * GESTIONE OPERATORI (ROLES) E CLOUD VAULT
- * ============================================================================
- */
-window.openOperatorListModal = () => {
-    if (!State.activeSede) return;
-    const sede = State.appStructure.sedi[State.activeSede];
-    const roles = sede.roles || [];
-
-    let html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:400px; max-height:80vh; overflow-y:auto; border:1px solid var(--accent); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+        <div style="background:var(--surface); padding:24px; border-radius:var(--radius-lg); width:100%; max-width:400px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                <h3 style="color:var(--accent); margin:0; font-weight:900;"><i class="fa-solid fa-users"></i> OPERATORI HUB</h3>
-                <button onclick="window.closeModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+                <h3 style="color:var(--accent); margin:0;">GESTIONE SQUADRE</h3>
+                <button onclick="window.closeModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem;">&times;</button>
             </div>
-            <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
-    `;
-
-    if (roles.length === 0) {
-        html += `<div style="text-align:center; color:var(--text-muted); font-size:0.9rem; padding:20px;">Nessun operatore configurato per questa sede.</div>`;
-    } else {
-        roles.forEach(r => {
-            html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px;">
-                <div>
-                    <div style="font-weight:800; color:var(--text-main);">${r.name.toUpperCase()}</div>
-                    <div style="font-size:0.7rem; color:var(--text-muted);"><i class="fa-solid fa-layer-group"></i> ${r.squadra || 'Nessuna squadra'}</div>
-                </div>
-                <button onclick="window.openRoleModal('${r.id}')" style="background:none; border:none; color:var(--accent); cursor:pointer; padding:8px;"><i class="fa-solid fa-pen"></i></button>
-            </div>`;
-        });
-    }
-
-    html += `
+            
+            <div style="background:rgba(0,0,0,0.2); padding:16px; border-radius:var(--radius-md); margin-bottom:16px;">
+                <div style="font-size:0.8rem; font-weight:800; color:var(--text-muted); margin-bottom:8px;">AGGIUNGI OPERATORE</div>
+                <input type="text" id="role-name" placeholder="Nome Operatore" style="width:100%; margin-bottom:8px;">
+                <input type="text" id="role-team" placeholder="Squadra (es. Cucina, Sala)" style="width:100%; margin-bottom:8px;">
+                <input type="password" inputmode="numeric" id="role-pin" placeholder="PIN Numerico" style="width:100%; margin-bottom:12px;">
+                <button onclick="window.saveRole()" class="btn-action solid" style="width:100%;"><i class="fa-solid fa-plus"></i> AGGIUNGI AL DATABASE</button>
             </div>
-            <button onclick="window.openRoleModal()" class="btn-action solid" style="width:100%; padding:12px; background:var(--accent); color:#000; font-weight:800;"><i class="fa-solid fa-plus"></i> AGGIUNGI OPERATORE</button>
+
+            <div style="overflow-y:auto; flex:1;">
+                ${rolesHtml.length > 0 ? rolesHtml : '<div style="text-align:center; color:var(--text-muted); font-size:0.9rem;">Nessun operatore configurato.</div>'}
+            </div>
         </div>
     `;
-    showModal(html);
+    const layer = getModalLayer(); layer.innerHTML = html; layer.style.display = 'flex';
 };
 
-window.openRoleModal = (roleId = null) => {
-    const sede = State.appStructure.sedi[State.activeSede];
-    const role = roleId ? sede.roles.find(r => r.id === roleId) : null;
-    const title = roleId ? 'MODIFICA OPERATORE' : 'NUOVO OPERATORE';
+window.saveRole = async () => {
+    const name = document.getElementById('role-name').value.trim();
+    const team = document.getElementById('role-team').value.trim();
+    const pin = document.getElementById('role-pin').value.trim();
     
-    const rName = role ? role.name : '';
-    const rPin = role ? role.pin : '';
-    const rSquadra = role ? (role.squadra || '') : '';
-
-    const html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:400px; border:1px solid var(--accent); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-            <h3 style="color:var(--accent); margin-top:0; font-weight:900;"><i class="fa-solid fa-user-plus"></i> ${title}</h3>
-            
-            <div class="input-group" style="margin-bottom:12px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">NOME OPERATORE / RUOLO</label>
-                <input type="text" id="modal-role-name" value="${rName}" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-            </div>
-            
-            <div class="input-group" style="margin-bottom:12px;">
-                <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">SQUADRA / REPARTO</label>
-                <input type="text" id="modal-role-squadra" value="${rSquadra}" placeholder="es. Cucina, Sala, Delivery" style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text-main); border-radius:6px; box-sizing:border-box;">
-            </div>
-
-            <div class="input-group" style="margin-bottom:20px;">
-                <label style="color:var(--danger); font-size:0.8rem; font-weight:800;">PIN DI ACCESSO (Numerico)</label>
-                <input type="text" inputmode="numeric" id="modal-role-pin" value="${rPin}" placeholder="es. 1234" style="width:100%; padding:12px; background:rgba(231,76,60,0.1); border:1px solid var(--danger); color:var(--danger); font-weight:900; letter-spacing:2px; border-radius:6px; box-sizing:border-box;">
-            </div>
-
-            <div style="display:flex; justify-content:space-between; gap:12px;">
-                ${roleId ? `<button onclick="window.deleteRole('${roleId}')" style="background:rgba(231,76,60,0.1); color:var(--danger); border:1px dashed var(--danger); padding:10px 16px; border-radius:6px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>` : '<div></div>'}
-                <div style="display:flex; gap:8px;">
-                    <button onclick="window.openOperatorListModal()" style="background:none; color:var(--text-muted); border:1px solid var(--border); padding:10px 16px; border-radius:6px; cursor:pointer; font-weight:800;">ANNULLA</button>
-                    <button onclick="window.saveRole('${roleId || ''}')" style="background:var(--accent); color:#000; font-weight:900; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">SALVA</button>
-                </div>
-            </div>
-        </div>
-    `;
-    showModal(html);
-};
-
-window.saveRole = async (roleId) => {
-    const nameInput = document.getElementById('modal-role-name').value.trim();
-    const squadraInput = document.getElementById('modal-role-squadra').value.trim();
-    const pinInput = document.getElementById('modal-role-pin').value.trim();
-
-    if (!nameInput || !pinInput) { alert("Nome e PIN sono obbligatori."); return; }
-
+    if (!name || !pin) { if (window.showToast) window.showToast("Nome e PIN sono obbligatori.", "error"); return; }
+    
     const sede = State.appStructure.sedi[State.activeSede];
-    if (!sede.roles) sede.roles = [];
-
-    const roleData = {
-        name: nameInput,
-        squadra: squadraInput,
-        pin: pinInput
-    };
-
-    if (roleId) {
-        const idx = sede.roles.findIndex(r => r.id === roleId);
-        if (idx > -1) {
-            roleData.id = roleId;
-            sede.roles[idx] = roleData;
-        }
-    } else {
-        roleData.id = generateId('role');
-        sede.roles.push(roleData);
-    }
-
+    const id = 'op_' + Cerbero.cerbero_hashSimple(name + Date.now());
+    
+    sede.roles.push({ id, name, squadra: team, pin });
     await lazzaro_saveState();
-    window.openOperatorListModal(); 
+    await Ledger.logAction('admin', 'CREAZIONE_OPERATORE', { name, team });
+    
+    window.openModal_Roles(); // Ricarica il modale
 };
 
 window.deleteRole = async (roleId) => {
     if (!confirm("Rimuovere definitivamente questo operatore?")) return;
-    
     const sede = State.appStructure.sedi[State.activeSede];
     sede.roles = sede.roles.filter(r => r.id !== roleId);
-    
     await lazzaro_saveState();
-    window.openOperatorListModal();
+    window.openModal_Roles();
 };
 
-window.openCloudModal = () => {
+/**
+ * ============================================================================
+ * 3. GESTIONE TURNI (FOLDERS)
+ * ============================================================================
+ */
+window.openModal_Folder = () => {
+    if (State.activeProfile !== 'admin') return;
     const html = `
-        <div style="background:var(--surface); padding:24px; border-radius:12px; width:100%; max-width:400px; border:1px solid var(--nexus); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-            <h3 style="color:var(--nexus); margin-top:0; font-weight:900;"><i class="fa-solid fa-database"></i> CLOUD VAULT & SICUREZZA</h3>
-            <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.5;">Il modulo Cloud per la sincronizzazione centralizzata (Firebase/AWS) richiede l'innesco del nodo server. Attualmente il sistema opera in modalità <b>ISOLATA (Local-First)</b>.</p>
-            <button onclick="window.wipeLocalDatabase()" class="btn-action" style="width:100%; padding:14px; background:rgba(231,76,60,0.1); color:var(--danger); border:1px dashed var(--danger); font-weight:900; margin-top:16px;"><i class="fa-solid fa-skull"></i> DISTRUGGI DATABASE LOCALE</button>
-            <button onclick="window.closeModal()" class="btn-action solid" style="width:100%; padding:14px; background:var(--text-muted); color:#000; font-weight:900; margin-top:12px; border:none;">CHIUDI</button>
+        <div style="background:var(--surface); padding:24px; border-radius:var(--radius-lg); width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+            <h3 style="color:var(--accent); margin-top:0;">NUOVO TURNO OPERATIVO</h3>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <input type="text" id="folder-name" placeholder="Nome Turno (es. Mattina, Serale)" style="width:100%;">
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-top:8px;">
+                    <button onclick="window.closeModal()" class="btn-action" style="background:var(--surface-variant); flex:1;">Annulla</button>
+                    <button onclick="window.saveFolder()" class="btn-action solid" style="flex:1;">Salva</button>
+                </div>
+            </div>
         </div>
     `;
-    showModal(html);
+    const layer = getModalLayer(); layer.innerHTML = html; layer.style.display = 'flex';
 };
 
-window.wipeLocalDatabase = async () => {
-    if (prompt("ATTENZIONE CRITICA: Questa operazione distruggerà irrimediabilmente l'intero database gestionale dal dispositivo. Scrivi 'DISTRUGGI' per confermare.") === 'DISTRUGGI') {
-        const success = await lazzaro_wipeVault();
-        if (success) {
-            sessionStorage.clear();
-            localStorage.clear();
-            alert("Database annientato. Riavvio in corso...");
-            window.location.reload(true);
-        } else {
-            alert("Errore critico durante la distruzione del database.");
-        }
+window.saveFolder = async () => {
+    const name = document.getElementById('folder-name').value.trim();
+    if (!name) return;
+    const sede = State.appStructure.sedi[State.activeSede];
+    if (!sede.folders) sede.folders = {};
+    const id = 'fld_' + Date.now();
+    sede.folders[id] = { id, name, sections: {} };
+    State.activeFolder = id;
+    await lazzaro_saveState();
+    await Ledger.logAction('admin', 'CREAZIONE_TURNO', { name });
+    closeModal(); window.renderApp();
+};
+
+window.switchFolder = (folderId) => {
+    State.activeFolder = folderId;
+    window.renderApp();
+};
+/**
+ * ============================================================================
+ * 4. GESTIONE CELLE LOGICHE (SECTIONS) E COPIA-INCOLLA STRUTTURALE
+ * ============================================================================
+ */
+window.openModal_Section = () => {
+    if (State.activeProfile !== 'admin') return;
+    const folder = State.appStructure.sedi[State.activeSede]?.folders[State.activeFolder];
+    if (!folder) { if (window.showToast) window.showToast("Seleziona o crea un Turno prima di aggiungere una Cella.", "error"); return; }
+
+    const html = `
+        <div style="background:var(--surface); padding:24px; border-radius:var(--radius-lg); width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+            <h3 style="color:var(--accent); margin-top:0;">NUOVA CELLA LOGICA</h3>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <input type="text" id="sec-name" placeholder="Nome (es. Frigo Pizze, Forno)" style="width:100%;">
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:800;">COLORE RIFERIMENTO:</label>
+                    <input type="color" id="sec-color" value="#A8C7FA" style="width:50px; height:40px; border:none; border-radius:8px; cursor:pointer; background:transparent;">
+                </div>
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-top:8px;">
+                    <button onclick="window.closeModal()" class="btn-action" style="background:var(--surface-variant); flex:1;">Annulla</button>
+                    <button onclick="window.saveSection()" class="btn-action solid" style="flex:1;">Salva</button>
+                </div>
+            </div>
+        </div>
+    `;
+    const layer = getModalLayer(); layer.innerHTML = html; layer.style.display = 'flex';
+};
+
+window.saveSection = async () => {
+    const name = document.getElementById('sec-name').value.trim();
+    const color = document.getElementById('sec-color').value;
+    if (!name) return;
+    
+    const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
+    const id = 'sec_' + Date.now();
+    folder.sections[id] = { id, name, color, items: {} };
+    
+    await lazzaro_saveState();
+    await Ledger.logAction('admin', 'CREAZIONE_CELLA_LOGICA', { name });
+    closeModal(); window.renderApp();
+};
+
+window.deleteSection = async (secId) => {
+    if (!confirm("Rimuovere l'intera cella logica e tutto il suo contenuto?")) return;
+    const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
+    delete folder.sections[secId];
+    await lazzaro_saveState();
+    await Ledger.logAction('admin', 'ELIMINAZIONE_CELLA', { secId });
+    window.renderApp();
+};
+
+window.copySectionLogic = (secId) => {
+    const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
+    const secData = folder.sections[secId];
+    if (secData) {
+        sessionStorage.setItem('scutum_clipboard_section', JSON.stringify(secData));
+        const btn = document.getElementById('floating-paste-btn');
+        if (btn) btn.style.display = 'flex';
+        if (window.showToast) window.showToast("Cella copiata. Seleziona un altro turno per incollarla.", "info");
     }
+};
+
+window.pasteSectionLogic = async () => {
+    const clip = sessionStorage.getItem('scutum_clipboard_section');
+    if (!clip) return;
+    try {
+        const secData = JSON.parse(clip);
+        const folder = State.appStructure.sedi[State.activeSede].folders[State.activeFolder];
+        if (!folder) return;
+        
+        const newSecId = 'sec_' + Date.now();
+        const clonedSec = JSON.parse(JSON.stringify(secData));
+        clonedSec.id = newSecId;
+        
+        // Rigenera ID degli item per evitare collisioni di stato
+        const newItems = {};
+        Object.keys(clonedSec.items).forEach((oldItemId, idx) => {
+            const newItemId = 'it_' + Date.now() + '_' + idx;
+            newItems[newItemId] = clonedSec.items[oldItemId];
+            newItems[newItemId].id = newItemId;
+        });
+        clonedSec.items = newItems;
+        
+        folder.sections[newSecId] = clonedSec;
+        await lazzaro_saveState();
+        await Ledger.logAction('admin', 'INCOLLA_CELLA', { originalName: clonedSec.name });
+        
+        sessionStorage.removeItem('scutum_clipboard_section');
+        const btn = document.getElementById('floating-paste-btn');
+        if (btn) btn.style.display = 'none';
+        
+        window.renderApp();
+        if (window.showToast) window.showToast("Cella incollata con successo.", "success");
+    } catch (e) {
+        console.error(e);
+        if (window.showToast) window.showToast("Errore durante l'incollatura.", "error");
+    }
+};
+
+/**
+ * ============================================================================
+ * 5. GESTIONE PRODOTTI E TASK (INVENTORY MODE & SOGLIE DINAMICHE)
+ * ============================================================================
+ */
+window.openModal_Item = (secId) => {
+    if (State.activeProfile !== 'admin') return;
+    const html = `
+        <div style="background:var(--surface); padding:24px; border-radius:var(--radius-lg); width:100%; max-width:400px; max-height:90vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+            <h3 style="color:var(--accent); margin-top:0;">AGGIUNGI PRODOTTO/TASK</h3>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <input type="hidden" id="item-secId" value="${secId}">
+                
+                <div>
+                    <label style="font-size:0.7rem; color:var(--text-muted); font-weight:800;">NOME IDENTIFICATIVO</label>
+                    <input type="text" id="item-name" placeholder="Es. Impasto Biga, Mozzarella..." style="width:100%; margin-top:4px;">
+                </div>
+                
+                <div>
+                    <label style="font-size:0.7rem; color:var(--text-muted); font-weight:800;">TIPO ELEMENTO</label>
+                    <select id="item-type" onchange="window.toggleItemTypeUI()" style="width:100%; margin-top:4px;">
+                        <option value="magazzino">Magazzino (Calcolo Quantità)</option>
+                        <option value="task">Azione / Task (Checklist)</option>
+                    </select>
+                </div>
+
+                <div id="magazzino-ui" style="display:flex; flex-direction:column; gap:12px; background:var(--surface-variant); padding:16px; border-radius:var(--radius-md);">
+                    <div style="font-size:0.8rem; font-weight:800; color:var(--accent);">SOGLIE OPERATIVE</div>
+                    
+                    <div>
+                        <label style="font-size:0.7rem; color:var(--text-muted);">Unità di Misura</label>
+                        <input type="text" id="item-unit" placeholder="pz, kg, lt..." value="pz" style="width:100%; margin-top:4px;">
+                    </div>
+                    
+                    <div style="display:flex; gap:12px;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.7rem; color:var(--text-muted);">Target Standard</label>
+                            <input type="number" id="item-th-std" placeholder="Es. 100" style="width:100%; margin-top:4px;">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:0.7rem; color:var(--danger); font-weight:800;">Alto Carico (Peak)</label>
+                            <input type="number" id="item-th-peak" placeholder="Es. 170" style="width:100%; margin-top:4px; border-bottom:2px solid var(--danger);">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-top:16px;">
+                    <button onclick="window.closeModal()" class="btn-action" style="background:var(--surface-variant); flex:1;">Annulla</button>
+                    <button onclick="window.saveItem()" class="btn-action solid" style="flex:1;">Salva Elemento</button>
+                </div>
+            </div>
+        </div>
+    `;
+    const layer = getModalLayer(); layer.innerHTML = html; layer.style.display = 'flex';
+    window.toggleItemTypeUI();
+};
+
+window.toggleItemTypeUI = () => {
+    const type = document.getElementById('item-type').value;
+    const magUI = document.getElementById('magazzino-ui');
+    if (magUI) magUI.style.display = type === 'magazzino' ? 'flex' : 'none';
+};
+
+window.saveItem = async () => {
+    const secId = document.getElementById('item-secId').value;
+    const name = document.getElementById('item-name').value.trim();
+    const type = document.getElementById('item-type').value;
+    
+    if (!name) return;
+
+    const unit = document.getElementById('item-unit')?.value.trim() || 'pz';
+    const th_std = parseInt(document.getElementById('item-th-std')?.value || '0', 10);
+    const th_peak = parseInt(document.getElementById('item-th-peak')?.value || '0', 10);
+
+    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[secId];
+    const id = 'it_' + Date.now();
+    const order = Object.keys(section.items).length;
+
+    section.items[id] = { id, name, type, unit, th_std, th_peak, order };
+    
+    await lazzaro_saveState();
+    await Ledger.logAction('admin', 'AGGIUNTA_PRODOTTO', { name, type });
+    closeModal(); window.renderApp();
+};
+
+window.deleteItem = async (secId, itemId) => {
+    if (!confirm("Rimuovere definitivamente questo elemento?")) return;
+    const section = State.appStructure.sedi[State.activeSede].folders[State.activeFolder].sections[secId];
+    delete section.items[itemId];
+    await lazzaro_saveState();
+    window.renderApp();
 };
