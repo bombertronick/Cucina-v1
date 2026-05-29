@@ -2,22 +2,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
 
 :root {
-    /* Palette Google Pixel Material You (Dark Mode Default) */
+    /* Palette Google Pixel Material You */
     --bg: #1C1B1F;                   
     --surface: #2B2930;              
     --surface-variant: #49454F;      
-    
     --accent: #A8C7FA;               
     --on-accent: #062E6F;            
-    
     --danger: #FFB4AB;               
     --on-danger: #690005;
-    
     --success: #93F0AA;              
-    
     --text-main: #E6E1E5;            
     --text-muted: #CAC4D0;           
-    
     --border: transparent;           
     
     /* Geometrie Material Design 3 */
@@ -27,9 +22,7 @@
     --radius-pill: 100px;            
 }
 
-/* =========================================================
-   1. RESET E TIPOGRAFIA GLOBALE
-   ========================================================= */
+/* 1. RESET E TIPOGRAFIA GLOBALE */
 body, html {
     font-family: 'Roboto', sans-serif !important;
     background-color: var(--bg) !important;
@@ -39,12 +32,9 @@ body, html {
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
 }
-
 h1, h2, h3, h4, h5, h6 { margin: 0; }
 
-/* =========================================================
-   2. BOTTONI (PILLOLE MATERIAL YOU)
-   ========================================================= */
+/* 2. BOTTONI (PILLOLE MATERIAL YOU) */
 button, .btn-action {
     font-family: 'Roboto', sans-serif !important;
     border-radius: var(--radius-pill) !important;
@@ -61,20 +51,16 @@ button, .btn-action {
     padding: 12px 24px;
     font-size: 0.95rem;
 }
-
 .btn-action.solid {
     background-color: var(--accent) !important;
     color: var(--on-accent) !important;
 }
-
 button:active, .btn-action:active {
     transform: scale(0.97) !important;
     filter: brightness(0.85);
 }
 
-/* =========================================================
-   3. INPUT E TEXTAREA (SCOMPARTI ARROTONDATI)
-   ========================================================= */
+/* 3. INPUT E TEXTAREA */
 input, select, textarea {
     font-family: 'Roboto', sans-serif !important;
     background-color: var(--surface-variant) !important;
@@ -85,23 +71,19 @@ input, select, textarea {
     padding: 12px;
     box-sizing: border-box;
 }
-
 input:focus, select:focus, textarea:focus {
     outline: none !important;
     border-color: var(--accent) !important;
 }
-
-/* =========================================================
-   4. LAYOUT PRINCIPALE E SIDEBAR
-   ========================================================= */
+/* 4. LAYOUT PRINCIPALE E SIDEBAR */
 .spa-view { display: none; }
 .spa-view.active { display: flex; }
 
 .sidebar {
     background-color: var(--surface) !important;
     border-right: 1px solid rgba(255,255,255,0.05) !important;
+    z-index: 1000;
 }
-
 .nav-item {
     padding: 12px 16px;
     border-radius: var(--radius-md);
@@ -118,15 +100,12 @@ input:focus, select:focus, textarea:focus {
     color: var(--accent) !important;
 }
 
-/* =========================================================
-   5. TURNI (FOLDER TABS) E HEADER
-   ========================================================= */
+/* 5. TURNI E HEADER */
 #header-title {
-    padding: 16px 0;
+    padding: 8px 0;
     white-space: normal !important; 
     line-height: 1.3;
 }
-
 .folder-tab {
     padding: 10px 20px;
     border-radius: var(--radius-pill);
@@ -141,17 +120,14 @@ input:focus, select:focus, textarea:focus {
     color: var(--on-accent);
 }
 
-/* =========================================================
-   6. CELLE LOGICHE E PRODOTTI (ITEM ROW)
-   ========================================================= */
+/* 6. CELLE LOGICHE E PRODOTTI */
 .section-container {
-    padding: 24px;
+    padding: 20px;
     margin-bottom: 24px;
     background-color: var(--surface);
-    border-radius: var(--radius-md) !important;
+    border-radius: var(--radius-lg) !important;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
-
 .section-header {
     display: flex;
     justify-content: space-between;
@@ -160,7 +136,6 @@ input:focus, select:focus, textarea:focus {
     padding-bottom: 12px;
     border-bottom: 1px dashed rgba(255,255,255,0.1);
 }
-
 .item-row {
     padding: 16px;
     background-color: var(--surface-variant) !important;
@@ -171,12 +146,10 @@ input:focus, select:focus, textarea:focus {
     gap: 12px;
     transition: opacity 0.3s;
 }
-
 .item-row.done {
     opacity: 0.6;
     filter: grayscale(0.5);
 }
-
 .item-main {
     display: flex;
     justify-content: space-between;
@@ -184,27 +157,22 @@ input:focus, select:focus, textarea:focus {
     gap: 12px;
     flex-wrap: wrap;
 }
-
 .item-name-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
-
 .item-name {
     font-size: 1.1rem;
     font-weight: 800;
 }
-
 .item-controls {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-/* =========================================================
-   7. CONTROLLI OPERATIVI (CHECKBOX PIXEL)
-   ========================================================= */
+/* 7. CONTROLLI OPERATIVI */
 .custom-checkbox {
     width: 32px;
     height: 32px;
@@ -216,16 +184,13 @@ input:focus, select:focus, textarea:focus {
     cursor: pointer;
     transition: all 0.2s;
 }
-
 .custom-checkbox.checked {
     background-color: var(--success);
     border-color: var(--success);
     color: #000;
 }
 
-/* =========================================================
-   8. MODALI, AUTH VAULT E MATRIOSKA (ELEVATION)
-   ========================================================= */
+/* 8. MODALI ED ELEVATION */
 #auth-screen > div:nth-child(2),
 #modal-layer > div {
     border-radius: var(--radius-lg) !important;
@@ -233,20 +198,72 @@ input:focus, select:focus, textarea:focus {
     border: none !important;
     box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.8) !important;
 }
-
 .matryoshka-team, .matryoshka-op {
     border-radius: var(--radius-md) !important;
     border: none !important;
     margin-bottom: 8px !important;
 }
 
-.matryoshka-op:active {
-    background-color: rgba(255,255,255,0.1) !important;
-}
-
-/* =========================================================
-   9. SCROLLBAR INVISIBILE (STILE MOBILE NATIVO)
-   ========================================================= */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* 9. SCROLLBAR INVISIBILE */
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+/* =========================================================
+   10. MOBILE-FIRST RESPONSIVE DESIGN (Il Cuore della Soluzione)
+   ========================================================= */
+.menu-toggle-btn {
+    display: none; /* Nascosto su PC */
+}
+
+#mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.6);
+    z-index: 999;
+    backdrop-filter: blur(2px);
+}
+
+@media (max-width: 768px) {
+    /* Mostra il pulsante Hamburger */
+    .menu-toggle-btn {
+        display: flex;
+        background: none;
+        border: none;
+        color: var(--text-main);
+        font-size: 1.5rem;
+        padding: 8px 16px 8px 0;
+        cursor: pointer;
+    }
+
+    /* Trasforma la Sidebar in un cassetto a comparsa */
+    .sidebar {
+        position: fixed;
+        left: -100%;
+        top: 0;
+        height: 100vh;
+        width: 85%;
+        max-width: 320px;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+    }
+
+    .sidebar.open {
+        left: 0;
+    }
+
+    /* Adatta l'area principale */
+    main {
+        width: 100%;
+        max-width: 100vw;
+    }
+
+    /* Ridimensiona i padding per recuperare spazio prezioso su mobile */
+    .section-container { padding: 16px; }
+    #main-content { padding: 12px; }
+    
+    /* I controlli dei prodotti si dispongono in modo più fluido */
+    .item-main { flex-direction: column; align-items: flex-start; }
+    .item-controls { width: 100%; justify-content: space-between; margin-top: 8px;}
+}
