@@ -4,8 +4,39 @@ import { State } from './core/state.js';
 import './core/ledger.js';
 import './ui/renderer.js';
 import './ui/nexus.js';
+import './ui/utilities.js'; // INIEZIONE MOTORE NOTIFICHE E BACKUP
 
 window._selectedLoginProfile = 'admin';
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); 
+    deferredPrompt = e;
+    if (!document.getElementById('pwa-install-popup')) {
+        const popupHTML = `
+        <div id="pwa-install-popup" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); width:90%; max-width:400px; background:var(--surface); border:2px solid var(--accent); border-radius:var(--radius-lg); padding:24px; box-shadow:0 10px 40px rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; justify-content:space-between;">
+                <div>
+                    <h3 style="color:var(--accent); margin:0 0 6px 0; font-size:1.2rem;"><i class="fa-solid fa-download"></i> INSTALLA APP</h3>
+                    <p style="color:var(--text-main); font-size:0.85rem; margin:0;">Aggiungi l'App Pixel alla Home.</p>
+                </div>
+                <button onclick="document.getElementById('pwa-install-popup').style.display='none'" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; font-weight:800; cursor:pointer;">&times;</button>
+            </div>
+            <button id="btn-pwa-install" class="btn-action solid" style="padding:14px; width:100%;">AGGIUNGI ALLA HOME</button>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', popupHTML);
+        document.getElementById('btn-pwa-install').addEventListener('click', async () => {
+            document.getElementById('pwa-install-popup').style.display = 'none';
+            if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
+        });
+    } else { document.getElementById('pwa-install-popup').style.display = 'flex'; }
+});
+
+window.addEventListener('appinstalled', () => {
+    const popup = document.getElementById('pwa-install-popup');
+    if (popup) popup.style.display = 'none';
+    deferredPrompt = null;
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
